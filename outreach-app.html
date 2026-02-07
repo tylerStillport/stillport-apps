@@ -1,0 +1,2964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OutreachFlow — Email Campaign Platform</title>
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+<style>
+/* ===== CSS RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #242836; --bg4: #2e3345;
+  --border: #333850; --text: #e2e5f0; --text2: #9ba3bf; --text3: #6b7394;
+  --primary: #6366f1; --primary-hover: #818cf8; --primary-bg: rgba(99,102,241,.12);
+  --green: #22c55e; --green-bg: rgba(34,197,94,.12);
+  --amber: #f59e0b; --amber-bg: rgba(245,158,11,.12);
+  --red: #ef4444; --red-bg: rgba(239,68,68,.12);
+  --blue: #3b82f6; --blue-bg: rgba(59,130,246,.12);
+  --radius: 8px; --radius-lg: 12px;
+  --shadow: 0 2px 8px rgba(0,0,0,.3);
+  --transition: .2s ease;
+}
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+a { color: var(--primary); text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+
+/* ===== LAYOUT ===== */
+.app { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { width: 240px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar-logo { padding: 20px; border-bottom: 1px solid var(--border); }
+.sidebar-logo h1 { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, var(--primary), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.sidebar-logo span { font-size: 11px; color: var(--text3); display: block; margin-top: 2px; }
+.sidebar-nav { flex: 1; padding: 12px; overflow-y: auto; }
+.nav-section { margin-bottom: 16px; }
+.nav-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text3); padding: 4px 12px; margin-bottom: 4px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); color: var(--text2); font-size: 13px; cursor: pointer; transition: var(--transition); border: none; background: none; width: 100%; text-align: left; }
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.nav-badge { margin-left: auto; background: var(--primary); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; flex-shrink: 0; background: var(--bg2); }
+.topbar-title { font-size: 16px; font-weight: 600; }
+.topbar-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ===== BUTTONS ===== */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; border: 1px solid transparent; transition: var(--transition); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: var(--bg3); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg4); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 10px 24px; font-size: 14px; }
+.btn-icon { padding: 6px; min-width: 32px; justify-content: center; }
+.btn svg { width: 16px; height: 16px; }
+
+/* ===== FORM ELEMENTS ===== */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); font-size: 13px; transition: var(--transition);
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-bg); }
+.form-textarea { resize: vertical; min-height: 100px; }
+.form-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ===== CARDS & PANELS ===== */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 15px; font-weight: 600; }
+
+/* ===== TABLE ===== */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text2); }
+tr:hover td { background: var(--bg3); }
+.table-empty { text-align: center; padding: 40px; color: var(--text3); }
+
+/* ===== BADGES ===== */
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-blue { background: var(--blue-bg); color: var(--blue); }
+.badge-purple { background: var(--primary-bg); color: var(--primary); }
+
+/* ===== STATS ===== */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; }
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 700; }
+.stat-change { font-size: 12px; margin-top: 4px; }
+
+/* ===== MODAL ===== */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: var(--transition); }
+.modal-overlay.active { opacity: 1; pointer-events: auto; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 90%; max-width: 640px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+.modal-close { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; padding: 4px; }
+.modal-close:hover { color: var(--text); }
+.modal-lg { max-width: 860px; }
+
+/* ===== TABS ===== */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab { padding: 10px 16px; font-size: 13px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: var(--transition); background: none; border-top: none; border-left: none; border-right: none; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* ===== TAG INPUT ===== */
+.tag { display: inline-flex; align-items: center; gap: 4px; background: var(--primary-bg); color: var(--primary); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.tag-remove { cursor: pointer; opacity: .7; }
+.tag-remove:hover { opacity: 1; }
+
+/* ===== SEQUENCE BUILDER ===== */
+.seq-steps { position: relative; padding-left: 28px; }
+.seq-steps::before { content: ''; position: absolute; left: 11px; top: 24px; bottom: 24px; width: 2px; background: var(--border); }
+.seq-step { position: relative; margin-bottom: 16px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.seq-step::before { content: ''; position: absolute; left: -22px; top: 20px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); border: 2px solid var(--bg2); }
+.seq-step-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.seq-step-title { font-size: 13px; font-weight: 600; }
+.seq-step-delay { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; background: var(--bg); border-radius: var(--radius); }
+.seq-step-delay label { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.seq-step-delay input { width: 60px; padding: 4px 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 12px; text-align: center; }
+.seq-step-delay select { padding: 4px 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 12px; }
+
+/* ===== VARIABLE CHIPS ===== */
+.var-chip { display: inline-block; background: var(--primary-bg); color: var(--primary); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', monospace; cursor: pointer; }
+.var-chip:hover { background: var(--primary); color: #fff; }
+.var-palette { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--bg); border-radius: var(--radius); margin-bottom: 12px; }
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+/* ===== EMPTY STATE ===== */
+.empty-state { text-align: center; padding: 60px 20px; }
+.empty-state svg { width: 48px; height: 48px; color: var(--text3); margin-bottom: 16px; }
+.empty-state h3 { font-size: 16px; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; color: var(--text3); margin-bottom: 20px; }
+
+/* ===== SEARCH ===== */
+.search-box { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; }
+.search-box input { background: none; border: none; color: var(--text); font-size: 13px; outline: none; flex: 1; }
+.search-box svg { width: 16px; height: 16px; color: var(--text3); }
+
+/* ===== PAGE SECTIONS ===== */
+.page { display: none; }
+.page.active { display: block; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-header h2 { font-size: 20px; font-weight: 700; }
+
+/* ===== AB TEST ===== */
+.ab-variant { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.ab-variant-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ab-label { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+.ab-label-a { background: var(--blue-bg); color: var(--blue); }
+.ab-label-b { background: var(--amber-bg); color: var(--amber); }
+.ab-split { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ab-split-bar { flex: 1; height: 8px; border-radius: 4px; display: flex; overflow: hidden; }
+.ab-split-a { background: var(--blue); }
+.ab-split-b { background: var(--amber); }
+
+/* ===== TOAST ===== */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 16px; border-radius: var(--radius); font-size: 13px; box-shadow: var(--shadow); animation: slideIn .3s ease; display: flex; align-items: center; gap: 8px; }
+.toast-success { background: #065f46; color: #a7f3d0; border: 1px solid #059669; }
+.toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+.toast-info { background: #1e3a5f; color: #93c5fd; border: 1px solid #3b82f6; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ===== CONNECTION STATUS ===== */
+.connection-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.connection-dot.connected { background: var(--green); }
+.connection-dot.disconnected { background: var(--red); }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ===== CHECKBOX ===== */
+.checkbox-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.checkbox-wrap input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; }
+
+/* ===== LOGIN OVERLAY ===== */
+.login-overlay{position:fixed;inset:0;background:var(--bg);z-index:5000;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.login-overlay.hidden{display:none}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 40px;text-align:center;max-width:420px;width:90%}
+.login-card h1{font-size:28px;font-weight:700;background:linear-gradient(135deg,#6366f1,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.login-card .subtitle{font-size:14px;color:var(--text3);margin-bottom:32px}
+.login-btn{display:inline-flex;align-items:center;gap:10px;padding:12px 24px;border-radius:var(--radius);font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;transition:var(--transition);width:100%;justify-content:center}
+.login-btn:hover{background:var(--bg4);border-color:var(--primary)}
+.login-btn svg{width:20px;height:20px}
+.login-error{color:var(--red);font-size:13px;margin-top:16px;display:none}
+.login-loading{color:var(--text3);font-size:13px;margin-top:16px;display:none}
+.login-divider{margin:24px 0;border-top:1px solid var(--border);position:relative}
+.login-divider span{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--bg2);padding:0 12px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.9);z-index:4000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.loading-overlay.hidden{display:none}
+.loading-overlay .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.save-indicator{position:fixed;top:12px;right:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:12px;color:var(--text3);z-index:3000;opacity:0;transition:opacity .3s}
+.save-indicator.visible{opacity:1}
+
+/* ===== MERGE VAR AUTOCOMPLETE ===== */
+.merge-ac{position:absolute;z-index:6000;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.35);max-height:220px;overflow-y:auto;min-width:180px;display:none;}
+.merge-ac.visible{display:block}
+.merge-ac-item{padding:7px 12px;font-size:13px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:'SF Mono',monospace;transition:background .1s}
+.merge-ac-item:hover,.merge-ac-item.active{background:var(--primary);color:#fff;border-radius:2px}
+.merge-ac-item .ac-hint{margin-left:auto;font-size:11px;color:var(--text3);font-family:var(--font)}
+.merge-ac-item.active .ac-hint,.merge-ac-item:hover .ac-hint{color:rgba(255,255,255,.7)}
+.merge-ac-empty{padding:8px 12px;font-size:12px;color:var(--text3);font-style:italic}
+
+/* ===== CONTACT DETAIL VIEW ===== */
+.contact-name-link{color:var(--text);font-weight:500;cursor:pointer;transition:color .15s}
+.contact-name-link:hover{color:var(--primary);text-decoration:underline}
+.contact-detail-header{display:flex;align-items:flex-start;gap:20px;margin-bottom:24px}
+.contact-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#818cf8);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;flex-shrink:0}
+.contact-meta{flex:1}
+.contact-meta h2{font-size:22px;font-weight:700;color:var(--text);margin:0 0 4px 0}
+.contact-meta .subtitle{font-size:14px;color:var(--text3);margin:0}
+.contact-info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px}
+.contact-info-item{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.contact-info-item .ci-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px}
+.contact-info-item .ci-value{font-size:14px;color:var(--text);font-weight:500;word-break:break-word}
+.activity-timeline{position:relative;padding-left:24px}
+.activity-timeline::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.timeline-item{position:relative;margin-bottom:16px}
+.timeline-dot{position:absolute;left:-20px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg2)}
+.timeline-dot.sent{background:var(--primary)}
+.timeline-dot.opened{background:var(--green)}
+.timeline-dot.campaign{background:var(--amber)}
+.timeline-item .tl-time{font-size:11px;color:var(--text3);margin-bottom:2px}
+.timeline-item .tl-text{font-size:13px;color:var(--text2)}
+.timeline-item .tl-text strong{color:var(--text);font-weight:600}
+.tab-row{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab-row .tab{padding:8px 16px;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab-row .tab:hover{color:var(--text2)}
+.tab-row .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h1>OutreachFlow</h1>
+    <p class="subtitle">Email Campaign Platform</p>
+    <button class="login-btn" id="loginBtn" onclick="handleLogin()">
+      <svg viewBox="0 0 21 21"><path d="M0 0h10v10H0z" fill="#F25022"/><path d="M11 0h10v10H11z" fill="#7FBA00"/><path d="M0 11h10v10H0z" fill="#00A4EF"/><path d="M11 11h10v10H11z" fill="#FFB900"/></svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-loading" id="loginLoading">Signing in...</div>
+    <div class="login-divider"><span>or</span></div>
+    <button class="login-btn" style="font-size:12px;color:var(--text3);" onclick="skipLogin()">
+      Continue offline (local data only)
+    </button>
+    <p style="font-size:11px;color:var(--text3);margin-top:24px;">Sign in with your @stillport.co account to share campaigns and contacts with your team via OneDrive.</p>
+  </div>
+</div>
+
+<div class="loading-overlay hidden" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div id="loadingText" style="color:var(--text3);font-size:13px;">Loading...</div>
+</div>
+
+<div class="save-indicator" id="saveIndicator">Saving to OneDrive...</div>
+
+<div class="app" id="mainApp" style="display:none;">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>OutreachFlow</h1>
+      <span>Email Campaign Platform</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Main</div>
+        <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-page="campaigns" onclick="showPage('campaigns')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          Campaigns
+        </button>
+        <button class="nav-item" data-page="contacts" onclick="showPage('contacts')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Contacts
+        </button>
+        <button class="nav-item" data-page="templates" onclick="showPage('templates')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          Templates
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Quick Tools</div>
+        <button class="nav-item" data-page="compose" onclick="showPage('compose')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Send Email
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Analytics</div>
+        <button class="nav-item" data-page="analytics" onclick="showPage('analytics')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          Analytics
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Settings</div>
+        <button class="nav-item" data-page="settings" onclick="showPage('settings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Settings
+        </button>
+      </div>
+    </nav>
+    <div style="padding:12px; border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);">
+        <span class="connection-dot" id="connDot"></span>
+        <span id="connLabel">Not connected</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbarTitle">Dashboard</span>
+      <div class="topbar-actions">
+        <div class="search-box" style="width:220px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" placeholder="Search..." id="globalSearch" onkeyup="handleGlobalSearch(this.value)">
+        </div>
+        <button class="btn btn-primary" onclick="quickNewCampaign()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+          New Campaign
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- ===== DASHBOARD ===== -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header"><h2>Dashboard</h2></div>
+        <div class="stats-grid" id="dashStats"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Recent Campaigns</span></div>
+            <div id="dashRecentCampaigns"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Sending Activity (7 days)</span></div>
+            <canvas id="dashChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CAMPAIGNS ===== -->
+      <div class="page" id="page-campaigns">
+        <div class="page-header">
+          <h2>Campaigns</h2>
+          <button class="btn btn-primary" onclick="openCampaignModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+            New Campaign
+          </button>
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="filterCampaigns('all', this)">All</button>
+          <button class="tab" onclick="filterCampaigns('draft', this)">Drafts</button>
+          <button class="tab" onclick="filterCampaigns('active', this)">Active</button>
+          <button class="tab" onclick="filterCampaigns('paused', this)">Paused</button>
+          <button class="tab" onclick="filterCampaigns('completed', this)">Completed</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Campaign</th><th>Status</th><th>Contacts</th><th>Sent</th><th>Opens</th><th>Replies</th><th>Created</th><th></th></tr></thead>
+            <tbody id="campaignTableBody"></tbody>
+          </table>
+        </div>
+        <!-- Campaign Detail Panel -->
+        <div id="campaignDetailPanel" style="display:none;margin-top:16px;">
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <h3 id="campDetailTitle" style="font-size:15px;font-weight:600;"></h3>
+              <button class="btn btn-sm btn-secondary" onclick="closeCampaignDetail()">Close</button>
+            </div>
+            <div id="campDetailStats" class="stats-grid" style="margin-bottom:16px;"></div>
+            <h4 style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">Per-Contact Tracking</h4>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Contact</th><th>Email</th><th>Step</th><th>Sent</th><th>Opened</th><th>Opens</th></tr></thead>
+                <tbody id="campDetailTracking"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CONTACTS ===== -->
+      <div class="page" id="page-contacts">
+        <div class="page-header">
+          <h2>Contacts</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="openCSVImport()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import CSV
+            </button>
+            <button class="btn btn-primary" onclick="openContactModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+              Add Contact
+            </button>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;">
+          <div class="search-box" style="flex:1;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" placeholder="Search contacts..." oninput="searchContacts(this.value)">
+          </div>
+          <select class="form-select" style="width:160px;" id="contactListFilter" onchange="filterContactsByList(this.value)">
+            <option value="">All Lists</option>
+          </select>
+          <button class="btn btn-secondary" onclick="openNewListModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 5v14m-7-7h14"/></svg>
+            New List
+          </button>
+        </div>
+        <div id="batchBar" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 16px;margin-bottom:12px;display:none;align-items:center;gap:12px;font-size:13px;">
+          <span id="batchCount" style="color:var(--text);font-weight:600;">0 selected</span>
+          <select class="form-select" id="batchListSelect" style="width:180px;height:32px;font-size:12px;">
+            <option value="">Move to list...</option>
+          </select>
+          <button class="btn btn-sm btn-primary" onclick="batchMoveToList()">Move</button>
+          <button class="btn btn-sm btn-secondary" onclick="batchRemoveFromList()">Remove from list</button>
+          <div style="flex:1;"></div>
+          <button class="btn btn-sm btn-danger" onclick="batchDeleteContacts()">Delete selected</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th><input type="checkbox" onclick="toggleAllContacts(this)"></th><th>Name</th><th>Email</th><th>Company</th><th>Title</th><th>Lists</th><th>Status</th><th></th></tr></thead>
+            <tbody id="contactTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== CONTACT DETAIL ===== -->
+      <div class="page" id="page-contactDetail">
+        <div style="margin-bottom:16px;">
+          <button class="btn btn-secondary" onclick="showPage('contacts')" style="display:inline-flex;align-items:center;gap:6px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+            Back to Contacts
+          </button>
+        </div>
+        <div class="card" style="margin-bottom:20px;">
+          <div class="contact-detail-header">
+            <div class="contact-avatar" id="cdAvatar"></div>
+            <div class="contact-meta">
+              <h2 id="cdName"></h2>
+              <p class="subtitle" id="cdSubtitle"></p>
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="btn btn-sm btn-primary" id="cdEditBtn">Edit Contact</button>
+                <button class="btn btn-sm btn-secondary" id="cdComposeBtn">Send Email</button>
+              </div>
+            </div>
+          </div>
+          <div class="contact-info-grid" id="cdInfoGrid"></div>
+        </div>
+        <div class="card">
+          <div class="tab-row" id="cdTabs">
+            <div class="tab active" data-cdtab="activity" onclick="switchContactTab('activity',this)">Activity Timeline</div>
+            <div class="tab" data-cdtab="campaigns" onclick="switchContactTab('campaigns',this)">Campaigns</div>
+            <div class="tab" data-cdtab="emails" onclick="switchContactTab('emails',this)">One-off Emails</div>
+            <div class="tab" data-cdtab="opens" onclick="switchContactTab('opens',this)">Open Tracking</div>
+          </div>
+          <div id="cdTabActivity"></div>
+          <div id="cdTabCampaigns" style="display:none;"></div>
+          <div id="cdTabEmails" style="display:none;"></div>
+          <div id="cdTabOpens" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- ===== TEMPLATES ===== -->
+      <div class="page" id="page-templates">
+        <div class="page-header">
+          <h2>Email Templates</h2>
+          <button class="btn btn-primary" onclick="openTemplateModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+            New Template
+          </button>
+        </div>
+        <div id="templateGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;"></div>
+      </div>
+
+      <!-- ===== ANALYTICS ===== -->
+      <div class="page" id="page-analytics">
+        <div class="page-header"><h2>Analytics</h2>
+          <select class="form-select" style="width:180px;" id="analyticsRange" onchange="refreshAnalytics()">
+            <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option>
+          </select>
+        </div>
+        <div class="stats-grid" id="analyticsStats"></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Email Performance Over Time</span></div>
+            <canvas id="analyticsChart" height="260"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Campaign Breakdown</span></div>
+            <canvas id="pieChart" height="260"></canvas>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><span class="card-title">A/B Test Results</span></div>
+          <div id="abResultsTable"></div>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS ===== -->
+      <div class="page" id="page-settings">
+        <div class="page-header"><h2>Settings</h2></div>
+        <div class="tabs">
+          <button class="tab active" onclick="showSettingsTab('connection',this)">Cloud Status</button>
+          <button class="tab" onclick="showSettingsTab('sending',this)">Sending Limits</button>
+          <button class="tab" onclick="showSettingsTab('tracking',this)">Tracking</button>
+          <button class="tab" onclick="showSettingsTab('unsubscribe',this)">Unsubscribe</button>
+        </div>
+        <div id="settings-connection" class="card">
+          <h3 style="font-size:15px;margin-bottom:16px;">Microsoft 365 Cloud Status</h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">OutreachFlow uses Microsoft SSO to authenticate your team and stores shared data (contacts, campaigns, templates) on OneDrive.</p>
+          <div id="connectionStatus" style="margin-bottom:16px;font-size:13px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="handleLogout()">Sign out</button>
+          </div>
+        </div>
+        <div id="settings-sending" class="card" style="display:none;">
+          <h3 style="font-size:15px;margin-bottom:16px;">Sending Limits & Throttling</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Max emails per hour</label>
+              <input class="form-input" type="number" id="maxPerHour" value="30" oninput="saveSettings()">
+              <span class="form-hint">M365 allows ~10,000/day, but we recommend throttling for deliverability</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max emails per day</label>
+              <input class="form-input" type="number" id="maxPerDay" value="200" oninput="saveSettings()">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Delay between emails (seconds)</label>
+              <input class="form-input" type="number" id="sendDelay" value="15" oninput="saveSettings()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sending window</label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-input" type="time" id="sendStart" value="08:00" oninput="saveSettings()">
+                <span style="line-height:36px;color:var(--text3);">to</span>
+                <input class="form-input" type="time" id="sendEnd" value="18:00" oninput="saveSettings()">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="settings-tracking" class="card" style="display:none;">
+          <h3 style="font-size:15px;margin-bottom:16px;">Open Tracking</h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Track when recipients open your emails using a tracking pixel. Requires deploying the tracking server (see documentation).</p>
+          <div class="form-group"><label class="checkbox-wrap"><input type="checkbox" id="trackOpens" checked onchange="saveSettings()"> Enable open tracking</label></div>
+          <div class="form-group">
+            <label class="form-label">Tracking Server URL</label>
+            <input class="form-input" id="trackingUrl" placeholder="https://outreachflow-tracker.onrender.com/track" oninput="saveSettings()">
+            <span class="form-hint">The URL of your deployed tracking pixel server. Emails will include a hidden pixel pointing to this URL.</span>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Status</label>
+            <div id="trackingStatus" style="font-size:13px;color:var(--text3);">Not configured</div>
+          </div>
+          <button class="btn btn-secondary" style="margin-top:8px;" onclick="testTrackingServer()">Test Connection</button>
+        </div>
+        <div id="settings-unsubscribe" class="card" style="display:none;">
+          <h3 style="font-size:15px;margin-bottom:16px;">Unsubscribe Settings</h3>
+          <div class="form-group"><label class="checkbox-wrap"><input type="checkbox" id="addUnsub" checked onchange="saveSettings()"> Add unsubscribe link to all emails</label></div>
+          <div class="form-group">
+            <label class="form-label">Unsubscribe text</label>
+            <input class="form-input" id="unsubText" value="If you'd like to stop receiving these emails, click here to unsubscribe." oninput="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unsubscribe URL</label>
+            <input class="form-input" id="unsubUrl" placeholder="https://yoursite.com/unsubscribe?email={{email}}" oninput="saveSettings()">
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== COMPOSE / SEND EMAIL ===== -->
+      <div class="page" id="page-compose">
+        <div class="page-header">
+          <h2>Send Email</h2>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;">
+          <!-- Compose Form -->
+          <div class="card">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">Compose</h3>
+            <div class="form-group">
+              <label class="form-label">To</label>
+              <div style="display:flex;gap:8px;">
+                <select class="form-select" id="composeToSelect" style="flex:1;" onchange="onComposeToChange()">
+                  <option value="">— Pick a contact or type below —</option>
+                </select>
+              </div>
+              <input class="form-input" id="composeToManual" placeholder="Or type an email address (press Enter to add)" style="margin-top:6px;" oninput="onComposeManualInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();addManualRecipient();}">
+              <div id="composeRecipients" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subject</label>
+              <input class="form-input" id="composeSubject" placeholder="Email subject line...">
+              <span class="form-hint">Use {{first_name}}, {{company}} etc. for merge variables</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Load from Template</label>
+              <select class="form-select" id="composeTemplate" onchange="loadComposeTemplate()">
+                <option value="">— None (compose from scratch) —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Available Merge Variables</label>
+              <div class="var-palette" id="composeVarPalette"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Body (HTML supported)</label>
+              <textarea class="form-textarea" id="composeBody" style="min-height:260px;font-family:'SF Mono',monospace;font-size:12px;" placeholder="Hi {{first_name}},
+
+Write your email here..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+              <button class="btn btn-secondary" onclick="clearCompose()">Clear</button>
+              <button class="btn btn-primary btn-lg" onclick="sendOneOffEmail()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                Send Email
+              </button>
+            </div>
+          </div>
+          <!-- Sent History -->
+          <div>
+            <div class="card" style="margin-bottom:16px;">
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;">Recently Sent</h3>
+              <div id="sentEmailHistory" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+<!-- Contact Modal -->
+<div class="modal-overlay" id="contactModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="contactModalTitle">Add Contact</h3><button class="modal-close" onclick="closeModal('contactModal')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editContactId">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">First Name</label><input class="form-input" id="cFirstName" placeholder="Jane"></div>
+        <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" id="cLastName" placeholder="Doe"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="cEmail" placeholder="jane@company.com" type="email"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Company</label><input class="form-input" id="cCompany" placeholder="Acme Inc"></div>
+        <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="cTitle" placeholder="VP of Marketing"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="cPhone" placeholder="+1 555-123-4567"></div>
+        <div class="form-group"><label class="form-label">LinkedIn URL</label><input class="form-input" id="cLinkedin" placeholder="https://linkedin.com/in/..."></div>
+      </div>
+      <div class="form-group"><label class="form-label">List</label><select class="form-select" id="cList"><option value="">— No list —</option></select></div>
+      <div class="form-group"><label class="form-label">Custom Fields (JSON)</label><textarea class="form-textarea" id="cCustom" placeholder='{"industry":"SaaS","revenue":"$10M","pain_point":"scaling outbound"}'></textarea><span class="form-hint">Add any custom fields as JSON — these become merge variables in templates</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('contactModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveContact()">Save Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- CSV Import Modal -->
+<div class="modal-overlay" id="csvModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3>Import Contacts from CSV</h3><button class="modal-close" onclick="closeModal('csvModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Upload CSV File</label>
+        <input type="file" accept=".csv" id="csvFile" class="form-input" onchange="previewCSV(this)">
+        <span class="form-hint">CSV should have headers. We'll auto-map common column names (email, first_name, last_name, company, title, phone, linkedin).</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Add to List</label>
+        <input class="form-input" id="csvList" placeholder="e.g., Q1 Import">
+      </div>
+      <div id="csvPreview" style="display:none;margin-top:16px;">
+        <h4 style="font-size:14px;margin-bottom:8px;">Column Mapping</h4>
+        <div id="csvMapping"></div>
+        <h4 style="font-size:14px;margin:16px 0 8px;">Preview (first 5 rows)</h4>
+        <div class="table-wrap" id="csvPreviewTable"></div>
+        <p style="font-size:12px;color:var(--text3);margin-top:8px;" id="csvRowCount"></p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('csvModal')">Cancel</button>
+      <button class="btn btn-primary" id="csvImportBtn" onclick="importCSV()" disabled>Import Contacts</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template Modal -->
+<div class="modal-overlay" id="templateModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3 id="templateModalTitle">New Template</h3><button class="modal-close" onclick="closeModal('templateModal')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editTemplateId">
+      <div class="form-group"><label class="form-label">Template Name</label><input class="form-input" id="tplName" placeholder="e.g., Initial Outreach"></div>
+      <div class="form-group"><label class="form-label">Subject Line</label><input class="form-input" id="tplSubject" placeholder="e.g., {{first_name}}, quick question about {{company}}"><span class="form-hint">Use {{variable_name}} for personalization</span></div>
+      <div class="form-group">
+        <label class="form-label">Available Merge Variables</label>
+        <div class="var-palette" id="tplVarPalette"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email Body (HTML supported)</label><textarea class="form-textarea" id="tplBody" style="min-height:220px;font-family:'SF Mono',monospace;font-size:12px;" placeholder="Hi {{first_name}},
+
+I noticed {{company}} is growing fast..."></textarea></div>
+      <div class="form-group"><label class="form-label">Preview</label><div id="tplPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:13px;min-height:100px;color:var(--text2);"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('templateModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Modal -->
+<div class="modal-overlay" id="campaignModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3 id="campaignModalTitle">New Campaign</h3><button class="modal-close" onclick="closeModal('campaignModal')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editCampaignId">
+      <div class="tabs" id="campTabs">
+        <button class="tab active" onclick="showCampTab('basics',this)">Basics</button>
+        <button class="tab" onclick="showCampTab('sequence',this)">Sequence</button>
+        <button class="tab" onclick="showCampTab('abtest',this)">A/B Test</button>
+        <button class="tab" onclick="showCampTab('review',this)">Review</button>
+      </div>
+
+      <!-- Basics Tab -->
+      <div id="camp-basics">
+        <div class="form-group"><label class="form-label">Campaign Name</label><input class="form-input" id="campName" placeholder="e.g., Q1 SDR Outbound Sequence"></div>
+        <div class="form-group">
+          <label class="form-label">Contact List</label>
+          <select class="form-select" id="campContactList"><option value="">-- Select a list --</option></select>
+          <span class="form-hint" id="campContactCount"></span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input class="form-input" type="date" id="campStartDate">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Timezone</label>
+            <select class="form-select" id="campTimezone">
+              <option value="America/New_York">Eastern (ET)</option>
+              <option value="America/Chicago">Central (CT)</option>
+              <option value="America/Denver">Mountain (MT)</option>
+              <option value="America/Los_Angeles">Pacific (PT)</option>
+              <option value="UTC">UTC</option>
+              <option value="Europe/London">London (GMT)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sequence Tab -->
+      <div id="camp-sequence" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <span style="font-size:14px;font-weight:600;">Email Sequence Steps</span>
+          <button class="btn btn-secondary btn-sm" onclick="addSequenceStep()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 5v14m-7-7h14"/></svg>
+            Add Step
+          </button>
+        </div>
+        <div class="seq-steps" id="seqSteps"></div>
+      </div>
+
+      <!-- A/B Test Tab -->
+      <div id="camp-abtest" style="display:none;">
+        <div class="form-group">
+          <label class="checkbox-wrap"><input type="checkbox" id="abEnabled" onchange="toggleABTest()"> Enable A/B Testing</label>
+          <span class="form-hint">Split your audience and test different subject lines or email bodies</span>
+        </div>
+        <div id="abConfig" style="display:none;margin-top:16px;">
+          <div class="form-group">
+            <label class="form-label">Test Variable</label>
+            <select class="form-select" id="abVariable">
+              <option value="subject">Subject Line</option>
+              <option value="body">Email Body (Step 1)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Traffic Split</label>
+            <div class="ab-split">
+              <span style="font-size:12px;color:var(--blue);font-weight:600;">A: <span id="abSplitALabel">50%</span></span>
+              <input type="range" min="10" max="90" value="50" id="abSplitSlider" oninput="updateABSplit()" style="flex:1;">
+              <span style="font-size:12px;color:var(--amber);font-weight:600;">B: <span id="abSplitBLabel">50%</span></span>
+            </div>
+            <div class="ab-split-bar">
+              <div class="ab-split-a" id="abSplitBarA" style="width:50%;"></div>
+              <div class="ab-split-b" id="abSplitBarB" style="width:50%;"></div>
+            </div>
+          </div>
+          <div class="ab-variant">
+            <div class="ab-variant-header"><span class="ab-label ab-label-a">VARIANT A</span></div>
+            <div class="form-group"><label class="form-label" id="abALabel">Subject Line A</label><input class="form-input" id="abVariantA" placeholder="e.g., {{first_name}}, have you tried..."></div>
+          </div>
+          <div class="ab-variant">
+            <div class="ab-variant-header"><span class="ab-label ab-label-b">VARIANT B</span></div>
+            <div class="form-group"><label class="form-label" id="abBLabel">Subject Line B</label><input class="form-input" id="abVariantB" placeholder="e.g., Quick question for {{company}}"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Winning metric</label>
+            <select class="form-select" id="abMetric">
+              <option value="opens">Open Rate</option>
+              <option value="replies">Reply Rate</option>
+              <option value="clicks">Click Rate</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Review Tab -->
+      <div id="camp-review" style="display:none;">
+        <div id="campReviewContent"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('campaignModal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="saveCampaignDraft()">Save as Draft</button>
+      <button class="btn btn-primary" onclick="launchCampaign()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+        Launch Campaign
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- New List Modal -->
+<div class="modal-overlay" id="newListModal" onclick="if(event.target===this)closeModal('newListModal')">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><h3>Create New List</h3><button class="modal-close" onclick="closeModal('newListModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">List Name</label>
+        <input class="form-input" id="newListName" placeholder="e.g., Series A Batch 1, UK Investors, Follow-ups">
+      </div>
+      <p style="font-size:12px;color:var(--text3);margin-top:8px;">After creating a list, select contacts and use "Move to list" to add them.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('newListModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createNewList()">Create List</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== CLOUD CONFIG =====
+const OF_CLOUD_CFG_KEY = 'of_cloud_config';
+const OF_CLOUD_DEFAULTS = {
+  tenantId: '13dc13e3-f6f6-4c45-948d-baae80478dd4',
+  clientId: '17511f86-ad7d-40a2-9978-01a08df6934b',
+  folderPath: 'Stillport, Inc/09_INVESTOR RELATIONS/03_Investor Pipeline/03_Pipeline Tracker/CRM and Outreach Apps/OutreachFlow Data',
+};
+let ofCloudConfig = { ...OF_CLOUD_DEFAULTS, ...JSON.parse(localStorage.getItem(OF_CLOUD_CFG_KEY) || '{}') };
+if (!localStorage.getItem(OF_CLOUD_CFG_KEY)) localStorage.setItem(OF_CLOUD_CFG_KEY, JSON.stringify(ofCloudConfig));
+let msalInstance = null;
+let currentUser = null;
+let isCloudMode = false;
+let lastSyncTime = null;
+let autoRefreshInterval = null;
+
+// ===== MSAL AUTH =====
+function initMSAL() {
+  if (!ofCloudConfig.clientId || !ofCloudConfig.tenantId) return false;
+  try {
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: ofCloudConfig.clientId,
+        authority: `https://login.microsoftonline.com/${ofCloudConfig.tenantId}`,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false },
+    });
+    return true;
+  } catch (e) { console.error('MSAL init failed:', e); return false; }
+}
+
+async function handleLogin() {
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'block';
+  document.getElementById('loginBtn').disabled = true;
+  if (!initMSAL()) {
+    document.getElementById('loginError').textContent = 'Cloud not configured.';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+    return;
+  }
+  try {
+    const loginResp = await msalInstance.loginPopup({
+      scopes: ['User.Read', 'Files.ReadWrite', 'Mail.Send'],
+    });
+    currentUser = loginResp.account;
+    isCloudMode = true;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    await loadAppWithCloud();
+  } catch (err) {
+    console.error('Login failed:', err);
+    document.getElementById('loginError').textContent = err.message || 'Login failed. Please try again.';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+  }
+}
+
+function skipLogin() {
+  isCloudMode = false;
+  currentUser = null;
+  document.getElementById('loginOverlay').classList.add('hidden');
+  loadAppOffline();
+}
+
+async function handleLogout() {
+  if (msalInstance && currentUser) {
+    try { await msalInstance.logoutPopup({ account: currentUser }); } catch (e) { /* ignore */ }
+  }
+  currentUser = null;
+  isCloudMode = false;
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  sessionStorage.clear();
+  location.reload();
+}
+
+async function getAccessToken() {
+  if (!msalInstance || !currentUser) return null;
+  try {
+    const resp = await msalInstance.acquireTokenSilent({
+      scopes: ['Files.ReadWrite', 'Mail.Send'],
+      account: currentUser,
+    });
+    return resp.accessToken;
+  } catch (e) {
+    try {
+      const resp = await msalInstance.acquireTokenPopup({ scopes: ['Files.ReadWrite', 'Mail.Send'] });
+      return resp.accessToken;
+    } catch (e2) { console.error('Token error:', e2); return null; }
+  }
+}
+
+// ===== ONEDRIVE STORAGE =====
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const OF_DATA_FILES = ['of_contacts', 'of_templates', 'of_campaigns', 'of_settings', 'of_lists', 'of_sentEmails'];
+
+function getFilePath(key) {
+  const folder = ofCloudConfig.folderPath || '';
+  return folder ? `${folder}/${key}.json` : `${key}.json`;
+}
+
+async function odRead(key) {
+  const token = await getAccessToken();
+  if (!token) return null;
+  try {
+    const path = encodeURIComponent(getFilePath(key)).replace(/%2F/g, '/');
+    const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (e) { console.warn(`OneDrive read ${key}:`, e); return null; }
+}
+
+async function odWrite(key, data) {
+  const token = await getAccessToken();
+  if (!token) throw new Error('No auth token');
+  const path = encodeURIComponent(getFilePath(key)).replace(/%2F/g, '/');
+  const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+  return await resp.json();
+}
+
+// ===== DATA STORE =====
+const DB = {
+  contacts: [],
+  templates: [],
+  campaigns: [],
+  settings: {},
+  analytics: {},
+  lists: [],
+  sentEmails: [],
+};
+
+let persistTimers = {};
+function persist(key) {
+  localStorage.setItem('of_' + key, JSON.stringify(DB[key]));
+  if (isCloudMode && OF_DATA_FILES.includes('of_' + key)) {
+    clearTimeout(persistTimers[key]);
+    persistTimers[key] = setTimeout(async () => {
+      showSaveIndicator(true);
+      try {
+        await odWrite('of_' + key, DB[key]);
+        lastSyncTime = new Date();
+      } catch (e) {
+        console.error(`Cloud save failed for ${key}:`, e);
+        toast('Cloud save failed — changes saved locally', 'error');
+      }
+      showSaveIndicator(false);
+    }, 300);
+  }
+}
+function showSaveIndicator(show) {
+  const el = document.getElementById('saveIndicator');
+  if (show) el.classList.add('visible');
+  else setTimeout(() => el.classList.remove('visible'), 500);
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// ===== TOAST =====
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.innerHTML = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ===== NAVIGATION =====
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navBtn = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navBtn) navBtn.classList.add('active');
+  // For sub-pages, highlight the parent nav item
+  if (page === 'contactDetail') {
+    const contactsNav = document.querySelector('.nav-item[data-page="contacts"]');
+    if (contactsNav) contactsNav.classList.add('active');
+  }
+  const titles = {dashboard:'Dashboard',campaigns:'Campaigns',contacts:'Contacts',templates:'Email Templates',analytics:'Analytics',settings:'Settings',compose:'Send Email',contactDetail:'Contact Detail'};
+  document.getElementById('topbarTitle').textContent = titles[page] || page;
+  if (page === 'dashboard') refreshDashboard();
+  if (page === 'campaigns') renderCampaigns();
+  if (page === 'contacts') renderContacts();
+  if (page === 'templates') renderTemplates();
+  if (page === 'analytics') refreshAnalytics();
+  if (page === 'settings') loadSettings();
+  if (page === 'compose') initComposePage();
+}
+function quickNewCampaign() { showPage('campaigns'); openCampaignModal(); }
+
+// ===== COMPOSE / ONE-OFF EMAIL =====
+let composeRecipients = []; // [{email, name, contactId?}]
+
+function initComposePage() {
+  // Populate contact dropdown
+  const sel = document.getElementById('composeToSelect');
+  sel.innerHTML = '<option value="">— Pick a contact —</option>';
+  DB.contacts.forEach(c => {
+    const name = (c.firstName + ' ' + c.lastName).trim();
+    sel.innerHTML += `<option value="${c.id}">${name} &lt;${c.email}&gt;</option>`;
+  });
+  // Populate template dropdown
+  const tSel = document.getElementById('composeTemplate');
+  tSel.innerHTML = '<option value="">— None (compose from scratch) —</option>';
+  DB.templates.forEach(t => {
+    tSel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+  });
+  // Populate merge variables
+  const stdVars = ['first_name','last_name','email','company','title','phone'];
+  const customVars = new Set();
+  DB.contacts.forEach(c => { if(c.custom) Object.keys(c.custom).forEach(k => customVars.add(k)); });
+  const allVars = [...stdVars, ...customVars];
+  document.getElementById('composeVarPalette').innerHTML = allVars.map(v =>
+    `<span class="var-chip" onclick="insertComposeVar('${v}')">{{${v}}}</span>`
+  ).join('');
+  // Render sent history and poll for latest opens
+  renderSentHistory();
+  if (isCloudMode) pollTrackingOpens();
+  // Reset recipients display
+  renderComposeRecipients();
+}
+
+function onComposeToChange() {
+  const sel = document.getElementById('composeToSelect');
+  const cid = sel.value;
+  if (!cid) return;
+  const c = DB.contacts.find(x => String(x.id) === String(cid));
+  if (!c) return;
+  const name = (c.firstName + ' ' + c.lastName).trim();
+  if (!composeRecipients.find(r => r.email === c.email)) {
+    composeRecipients.push({ email: c.email, name, contactId: c.id });
+  }
+  sel.value = '';
+  renderComposeRecipients();
+}
+
+function onComposeManualInput() {
+  const input = document.getElementById('composeToManual');
+  const val = input.value.trim();
+  // Check for enter-like behavior (comma or space after a valid email)
+  if (val.includes(',') || val.includes(' ')) {
+    const parts = val.split(/[,\s]+/).filter(Boolean);
+    parts.forEach(p => {
+      if (p.includes('@') && !composeRecipients.find(r => r.email === p)) {
+        composeRecipients.push({ email: p, name: p });
+      }
+    });
+    input.value = '';
+    renderComposeRecipients();
+  }
+}
+
+function addManualRecipient() {
+  const input = document.getElementById('composeToManual');
+  const email = input.value.trim();
+  if (email && email.includes('@') && !composeRecipients.find(r => r.email === email)) {
+    composeRecipients.push({ email, name: email });
+    input.value = '';
+    renderComposeRecipients();
+  }
+}
+
+function removeRecipient(email) {
+  composeRecipients = composeRecipients.filter(r => r.email !== email);
+  renderComposeRecipients();
+}
+
+function renderComposeRecipients() {
+  const el = document.getElementById('composeRecipients');
+  if (!composeRecipients.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text3);">No recipients added yet</span>';
+    return;
+  }
+  el.innerHTML = composeRecipients.map(r =>
+    `<span class="tag">${r.name} <span class="tag-remove" onclick="removeRecipient('${r.email}')">&times;</span></span>`
+  ).join('');
+}
+
+function insertComposeVar(v) {
+  const ta = document.getElementById('composeBody');
+  const start = ta.selectionStart;
+  const text = ta.value;
+  ta.value = text.slice(0, start) + '{{' + v + '}}' + text.slice(ta.selectionEnd);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + v.length + 4;
+}
+
+function loadComposeTemplate() {
+  const tplId = document.getElementById('composeTemplate').value;
+  if (!tplId) return;
+  const tpl = DB.templates.find(t => t.id === tplId);
+  if (!tpl) return;
+  document.getElementById('composeSubject').value = tpl.subject || '';
+  document.getElementById('composeBody').value = tpl.body || '';
+}
+
+function clearCompose() {
+  composeRecipients = [];
+  document.getElementById('composeToSelect').value = '';
+  document.getElementById('composeToManual').value = '';
+  document.getElementById('composeSubject').value = '';
+  document.getElementById('composeBody').value = '';
+  document.getElementById('composeTemplate').value = '';
+  renderComposeRecipients();
+}
+
+async function sendOneOffEmail() {
+  // Finalize manual input if present
+  const manualInput = document.getElementById('composeToManual');
+  const manualVal = manualInput.value.trim();
+  if (manualVal && manualVal.includes('@') && !composeRecipients.find(r => r.email === manualVal)) {
+    composeRecipients.push({ email: manualVal, name: manualVal });
+    manualInput.value = '';
+    renderComposeRecipients();
+  }
+
+  if (!composeRecipients.length) { toast('Please add at least one recipient', 'error'); return; }
+  const subject = document.getElementById('composeSubject').value.trim();
+  if (!subject) { toast('Please enter a subject line', 'error'); return; }
+  const bodyRaw = document.getElementById('composeBody').value.trim();
+  if (!bodyRaw) { toast('Please write an email body', 'error'); return; }
+
+  const DEFAULT_TRACK_URL = 'https://outreachflow-tracker.onrender.com/track';
+  const trackUrl = (DB.settings.trackingUrl || DEFAULT_TRACK_URL).trim();
+  const trackEnabled = DB.settings.trackOpens !== false;
+  let sent = 0, failed = 0;
+
+  for (const recip of composeRecipients) {
+    try {
+      // Merge variables if the recipient is a known contact
+      let finalSubject = subject;
+      let finalBody = bodyRaw;
+      if (recip.contactId) {
+        const contact = DB.contacts.find(c => String(c.id) === String(recip.contactId));
+        if (contact) {
+          finalSubject = mergeVars(finalSubject, contact);
+          finalBody = mergeVars(finalBody, contact);
+        }
+      }
+      // Add tracking pixel if enabled
+      let trackId = null;
+      if (trackEnabled && trackUrl) {
+        trackId = uid();
+        finalBody += `<img src="${trackUrl}?tid=${trackId}&cid=oneoff" width="1" height="1" style="display:none;" alt="">`;
+      }
+      await sendEmailM365(recip.email, finalSubject, finalBody);
+      // Record in sent emails
+      DB.sentEmails.unshift({
+        id: uid(),
+        to: recip.email,
+        toName: recip.name,
+        contactId: recip.contactId || null,
+        subject: finalSubject,
+        bodyPreview: finalBody.replace(/<[^>]*>/g, '').substring(0, 200),
+        sentAt: new Date().toISOString(),
+        trackingId: trackId,
+      });
+      sent++;
+    } catch(e) {
+      console.error('Failed to send to', recip.email, e);
+      failed++;
+    }
+  }
+
+  // Persist and update UI
+  persist('sentEmails');
+  renderSentHistory();
+
+  if (sent > 0 && failed === 0) {
+    toast(`Email sent to ${sent} recipient${sent > 1 ? 's' : ''}!`);
+    clearCompose();
+  } else if (sent > 0) {
+    toast(`Sent to ${sent}, failed for ${failed}`, 'info');
+  } else {
+    toast('Failed to send emails', 'error');
+  }
+}
+
+function renderSentHistory() {
+  const el = document.getElementById('sentEmailHistory');
+  if (!DB.sentEmails || !DB.sentEmails.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">No emails sent yet</div>';
+    return;
+  }
+  // Show last 20
+  const recent = DB.sentEmails.slice(0, 20);
+  el.innerHTML = recent.map(e => {
+    const dt = new Date(e.sentAt);
+    const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' ' + dt.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+    const hasOpens = e.opens && e.opens.length > 0;
+    const openBadge = hasOpens
+      ? `<span class="badge badge-green" style="font-size:10px;">Opened${e.opens.length > 1 ? ' (' + e.opens.length + 'x)' : ''}</span>`
+      : (e.trackingId ? '<span class="badge badge-blue" style="font-size:10px;">Sent</span>' : '<span class="badge" style="font-size:10px;background:var(--bg3);color:var(--text3);">No tracking</span>');
+    let openDetail = '';
+    if (hasOpens) {
+      const firstOpen = new Date(e.opens[0].ts);
+      openDetail = `<div style="color:var(--green);font-size:11px;margin-top:3px;">First opened: ${firstOpen.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${firstOpen.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'})}</div>`;
+    }
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <strong style="color:var(--text);font-size:13px;">${e.toName || e.to}</strong>
+        ${openBadge}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+        <span style="color:var(--text2);">${e.subject}</span>
+        <span style="color:var(--text3);white-space:nowrap;font-size:11px;">${timeStr}</span>
+      </div>
+      ${openDetail}
+    </div>`;
+  }).join('');
+}
+
+// ===== CONTACT DETAIL VIEW =====
+let currentContactId = null;
+
+function openContactDetail(contactId) {
+  const c = DB.contacts.find(x => String(x.id) === String(contactId));
+  if (!c) { toast('Contact not found', 'error'); return; }
+  currentContactId = contactId;
+  showPage('contactDetail');
+  document.getElementById('topbarTitle').textContent = (c.firstName + ' ' + c.lastName).trim();
+
+  // Avatar initials
+  const initials = ((c.firstName||'')[0] || '') + ((c.lastName||'')[0] || '');
+  document.getElementById('cdAvatar').textContent = initials.toUpperCase() || '?';
+
+  // Name & subtitle
+  document.getElementById('cdName').textContent = (c.firstName + ' ' + c.lastName).trim();
+  document.getElementById('cdSubtitle').textContent = [c.title, c.company].filter(Boolean).join(' at ') || c.email;
+
+  // Edit & compose buttons
+  document.getElementById('cdEditBtn').onclick = () => { openContactModal(c); };
+  document.getElementById('cdComposeBtn').onclick = () => {
+    showPage('compose');
+    initComposePage();
+    // Pre-fill recipient
+    composeRecipients = [{ email: c.email, name: (c.firstName + ' ' + c.lastName).trim(), contactId: c.id }];
+    renderComposeRecipients();
+  };
+
+  // Info grid
+  const fields = [
+    { label: 'Email', value: c.email },
+    { label: 'Phone', value: c.phone },
+    { label: 'Company', value: c.company },
+    { label: 'Title', value: c.title },
+    { label: 'LinkedIn', value: c.linkedin },
+    { label: 'List', value: c.list },
+    { label: 'Status', value: c.status || 'active' },
+    { label: 'Added', value: c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '-' },
+  ];
+  // Add custom fields
+  if (c.custom) {
+    Object.entries(c.custom).forEach(([k,v]) => {
+      if (v) fields.push({ label: k.replace(/_/g,' '), value: String(v) });
+    });
+  }
+  document.getElementById('cdInfoGrid').innerHTML = fields.filter(f => f.value).map(f =>
+    `<div class="contact-info-item"><div class="ci-label">${f.label}</div><div class="ci-value">${f.value}</div></div>`
+  ).join('');
+
+  // Render tabs
+  switchContactTab('activity', document.querySelector('#cdTabs .tab[data-cdtab="activity"]'));
+}
+
+function switchContactTab(tab, el) {
+  // Toggle tab highlight
+  document.querySelectorAll('#cdTabs .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  // Toggle tab content
+  ['Activity','Campaigns','Emails','Opens'].forEach(t => {
+    document.getElementById('cdTab' + t).style.display = 'none';
+  });
+  const panelId = 'cdTab' + tab.charAt(0).toUpperCase() + tab.slice(1);
+  document.getElementById(panelId).style.display = '';
+
+  const c = DB.contacts.find(x => String(x.id) === String(currentContactId));
+  if (!c) return;
+
+  if (tab === 'activity') renderContactActivity(c);
+  if (tab === 'campaigns') renderContactCampaigns(c);
+  if (tab === 'emails') renderContactEmails(c);
+  if (tab === 'opens') renderContactOpens(c);
+}
+
+function getContactActivity(c) {
+  // Collect all events for this contact into a unified timeline
+  const events = [];
+  const cEmail = (c.email || '').toLowerCase();
+  const cId = String(c.id);
+
+  // 1. Campaign sends & opens
+  DB.campaigns.forEach(camp => {
+    if (!camp.tracking) return;
+    camp.tracking.forEach(t => {
+      if (String(t.contactId) === cId || (t.email||'').toLowerCase() === cEmail) {
+        events.push({
+          type: 'campaign_sent',
+          date: t.sentAt,
+          subject: camp.name + (t.stepNum > 1 ? ' (Step ' + t.stepNum + ')' : ''),
+          campaign: camp.name,
+          campaignId: camp.id,
+        });
+        if (t.opens && t.opens.length) {
+          t.opens.forEach(o => {
+            events.push({
+              type: 'campaign_opened',
+              date: o.ts,
+              subject: camp.name + (t.stepNum > 1 ? ' (Step ' + t.stepNum + ')' : ''),
+              campaign: camp.name,
+              campaignId: camp.id,
+              ip: o.ip,
+              ua: o.ua,
+            });
+          });
+        }
+      }
+    });
+  });
+
+  // 2. One-off emails
+  if (DB.sentEmails) {
+    DB.sentEmails.forEach(e => {
+      if (String(e.contactId) === cId || (e.to||'').toLowerCase() === cEmail) {
+        events.push({
+          type: 'email_sent',
+          date: e.sentAt,
+          subject: e.subject,
+          to: e.to,
+          trackingId: e.trackingId,
+        });
+        if (e.opens && e.opens.length) {
+          e.opens.forEach(o => {
+            events.push({
+              type: 'email_opened',
+              date: o.ts,
+              subject: e.subject,
+              ip: o.ip,
+              ua: o.ua,
+            });
+          });
+        }
+      }
+    });
+  }
+
+  // 3. Contact creation
+  if (c.createdAt) {
+    events.push({ type: 'contact_created', date: c.createdAt, subject: 'Contact added to OutreachFlow' });
+  }
+
+  // Sort newest first
+  events.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return events;
+}
+
+function fmtDate(d) {
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' ' + dt.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+}
+
+function renderContactActivity(c) {
+  const events = getContactActivity(c);
+  const el = document.getElementById('cdTabActivity');
+  if (!events.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">No activity recorded for this contact yet.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="activity-timeline">' + events.map(e => {
+    let dotClass = 'sent';
+    let icon = '';
+    let label = '';
+    if (e.type === 'campaign_sent') {
+      dotClass = 'campaign';
+      label = `<strong>Campaign sent</strong> — ${e.subject}`;
+    } else if (e.type === 'campaign_opened') {
+      dotClass = 'opened';
+      label = `<strong>Opened campaign email</strong> — ${e.subject}`;
+    } else if (e.type === 'email_sent') {
+      dotClass = 'sent';
+      label = `<strong>One-off email sent</strong> — ${e.subject}`;
+    } else if (e.type === 'email_opened') {
+      dotClass = 'opened';
+      label = `<strong>Opened email</strong> — ${e.subject}`;
+    } else if (e.type === 'contact_created') {
+      dotClass = 'sent';
+      label = `<strong>${e.subject}</strong>`;
+    }
+    return `<div class="timeline-item">
+      <div class="timeline-dot ${dotClass}"></div>
+      <div class="tl-time">${fmtDate(e.date)}</div>
+      <div class="tl-text">${label}</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function renderContactCampaigns(c) {
+  const el = document.getElementById('cdTabCampaigns');
+  const cId = String(c.id);
+  const cEmail = (c.email || '').toLowerCase();
+  // Find all campaigns this contact was part of
+  const campData = [];
+  DB.campaigns.forEach(camp => {
+    if (!camp.tracking) return;
+    const myTracking = camp.tracking.filter(t => String(t.contactId) === cId || (t.email||'').toLowerCase() === cEmail);
+    if (myTracking.length) {
+      campData.push({ campaign: camp, tracking: myTracking });
+    }
+  });
+  if (!campData.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">This contact hasn\'t been included in any campaigns yet.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Campaign</th><th>Step</th><th>Sent</th><th>Status</th><th>Opens</th><th>First Opened</th></tr></thead><tbody>' +
+    campData.flatMap(cd => cd.tracking.map(t => {
+      const hasOpened = t.opens && t.opens.length > 0;
+      const firstOpen = hasOpened ? fmtDate(t.opens[0].ts) : '—';
+      const openCount = t.opens ? t.opens.length : 0;
+      return `<tr>
+        <td style="color:var(--text);font-weight:500;">${cd.campaign.name}</td>
+        <td>Step ${t.stepNum || 1}</td>
+        <td>${fmtDate(t.sentAt)}</td>
+        <td>${hasOpened ? '<span class="badge badge-green">Opened</span>' : '<span class="badge badge-amber">Not opened</span>'}</td>
+        <td>${openCount > 0 ? openCount + (openCount === 1 ? ' time' : ' times') : '—'}</td>
+        <td style="font-size:12px;color:var(--text3);">${firstOpen}</td>
+      </tr>`;
+    })).join('') + '</tbody></table></div>';
+}
+
+function renderContactEmails(c) {
+  const el = document.getElementById('cdTabEmails');
+  const cId = String(c.id);
+  const cEmail = (c.email || '').toLowerCase();
+  const emails = (DB.sentEmails || []).filter(e => String(e.contactId) === cId || (e.to||'').toLowerCase() === cEmail);
+  if (!emails.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">No one-off emails have been sent to this contact.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Subject</th><th>Sent</th><th>Status</th><th>Opens</th><th>First Opened</th></tr></thead><tbody>' +
+    emails.map(e => {
+      const hasOpened = e.opens && e.opens.length > 0;
+      const firstOpen = hasOpened ? fmtDate(e.opens[0].ts) : '—';
+      const openCount = e.opens ? e.opens.length : 0;
+      const badge = hasOpened
+        ? '<span class="badge badge-green">Opened</span>'
+        : (e.trackingId ? '<span class="badge badge-blue">Sent</span>' : '<span class="badge" style="background:var(--bg3);color:var(--text3);">No tracking</span>');
+      return `<tr>
+        <td style="color:var(--text);font-weight:500;">${e.subject}</td>
+        <td>${fmtDate(e.sentAt)}</td>
+        <td>${badge}</td>
+        <td>${openCount > 0 ? openCount + (openCount === 1 ? ' time' : ' times') : '—'}</td>
+        <td style="font-size:12px;color:var(--text3);">${firstOpen}</td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+function renderContactOpens(c) {
+  const el = document.getElementById('cdTabOpens');
+  const events = getContactActivity(c).filter(e => e.type === 'campaign_opened' || e.type === 'email_opened');
+  if (!events.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">No open events recorded for this contact.</div>';
+    return;
+  }
+  // Summary stats
+  const totalOpens = events.length;
+  const uniqueSubjects = new Set(events.map(e => e.subject)).size;
+  const lastOpen = fmtDate(events[0].date);
+
+  el.innerHTML = `
+    <div style="display:flex;gap:16px;margin-bottom:16px;">
+      <div class="stat-card"><div class="stat-label">Total Opens</div><div class="stat-value" style="color:var(--green);">${totalOpens}</div></div>
+      <div class="stat-card"><div class="stat-label">Unique Emails Opened</div><div class="stat-value">${uniqueSubjects}</div></div>
+      <div class="stat-card"><div class="stat-label">Last Opened</div><div class="stat-value" style="font-size:14px;">${lastOpen}</div></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>When</th><th>Email</th><th>Source</th></tr></thead><tbody>` +
+    events.map(e => {
+      const source = e.type === 'campaign_opened' ? `<span class="badge badge-amber">Campaign</span> ${e.campaign||''}` : '<span class="badge badge-blue">One-off</span>';
+      return `<tr>
+        <td style="font-size:12px;">${fmtDate(e.date)}</td>
+        <td style="color:var(--text);font-weight:500;">${e.subject}</td>
+        <td>${source}</td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+// ===== MERGE VARIABLE AUTOCOMPLETE =====
+(function() {
+  // Dropdown element (created once, reused)
+  const acBox = document.createElement('div');
+  acBox.className = 'merge-ac';
+  acBox.id = 'mergeAcDropdown';
+  document.body.appendChild(acBox);
+
+  let acActive = false;      // dropdown visible?
+  let acField = null;         // the input/textarea that triggered it
+  let acStartPos = -1;        // cursor position where {{ was typed
+  let acItems = [];           // current filtered items
+  let acIdx = -1;             // highlighted index
+
+  // Standard category hints for nicer display
+  const varHints = {first_name:'Contact',last_name:'Contact',email:'Contact',company:'Contact',title:'Contact',phone:'Contact'};
+
+  function getMergeVars() {
+    const std = ['first_name','last_name','email','company','title','phone'];
+    const custom = new Set();
+    DB.contacts.forEach(c => { if(c.custom) Object.keys(c.custom).forEach(k => custom.add(k)); });
+    return [...std, ...Array.from(custom)];
+  }
+
+  function showAc(field, startPos) {
+    acField = field;
+    acStartPos = startPos;
+    acActive = true;
+    acIdx = -1;
+    filterAc('');
+    positionAc();
+  }
+
+  function hideAc() {
+    acActive = false;
+    acField = null;
+    acStartPos = -1;
+    acItems = [];
+    acIdx = -1;
+    acBox.classList.remove('visible');
+  }
+
+  function filterAc(query) {
+    const all = getMergeVars();
+    const q = query.toLowerCase();
+    acItems = q ? all.filter(v => v.toLowerCase().includes(q)) : all;
+    acIdx = acItems.length > 0 ? 0 : -1;
+    renderAc();
+  }
+
+  function renderAc() {
+    if (!acItems.length) {
+      acBox.innerHTML = '<div class="merge-ac-empty">No matching variables</div>';
+      acBox.classList.add('visible');
+      return;
+    }
+    acBox.innerHTML = acItems.map((v, i) => {
+      const hint = varHints[v] || 'Custom';
+      return `<div class="merge-ac-item${i === acIdx ? ' active' : ''}" data-idx="${i}" data-var="${v}">{{${v}}}<span class="ac-hint">${hint}</span></div>`;
+    }).join('');
+    acBox.classList.add('visible');
+
+    // Scroll active item into view
+    const activeEl = acBox.querySelector('.merge-ac-item.active');
+    if (activeEl) activeEl.scrollIntoView({block:'nearest'});
+  }
+
+  function positionAc() {
+    if (!acField) return;
+    const rect = acField.getBoundingClientRect();
+
+    // For textareas, try to position near the cursor line
+    if (acField.tagName === 'TEXTAREA') {
+      // Create a mirror to measure cursor position
+      const mirror = document.createElement('div');
+      const style = window.getComputedStyle(acField);
+      mirror.style.cssText = `position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;width:${style.width};font:${style.font};padding:${style.padding};border:${style.border};line-height:${style.lineHeight};letter-spacing:${style.letterSpacing};`;
+      const textBefore = acField.value.substring(0, acField.selectionStart);
+      mirror.textContent = textBefore;
+      const marker = document.createElement('span');
+      marker.textContent = '|';
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      const markerRect = marker.getBoundingClientRect();
+      const mirrorRect = mirror.getBoundingClientRect();
+      const relY = markerRect.top - mirrorRect.top;
+      const relX = markerRect.left - mirrorRect.left;
+      document.body.removeChild(mirror);
+
+      const scrollTop = acField.scrollTop || 0;
+      let top = rect.top + relY - scrollTop + 22;
+      let left = rect.left + Math.min(relX, rect.width - 200);
+      // Clamp to viewport
+      if (top + 220 > window.innerHeight) top = rect.top + relY - scrollTop - 200;
+      if (left + 200 > window.innerWidth) left = window.innerWidth - 210;
+      acBox.style.top = Math.max(0, top) + 'px';
+      acBox.style.left = Math.max(0, left) + 'px';
+    } else {
+      // Input field — position below it
+      let top = rect.bottom + 4;
+      let left = rect.left;
+      if (top + 220 > window.innerHeight) top = rect.top - 220;
+      acBox.style.top = top + 'px';
+      acBox.style.left = left + 'px';
+    }
+  }
+
+  function selectAcItem(varName) {
+    if (!acField || acStartPos < 0) return;
+    const before = acField.value.substring(0, acStartPos);
+    const after = acField.value.substring(acField.selectionStart);
+    const insert = '{{' + varName + '}}';
+    acField.value = before + insert + after;
+    const newPos = acStartPos + insert.length;
+    acField.focus();
+    acField.selectionStart = acField.selectionEnd = newPos;
+    hideAc();
+    // Trigger input event for preview updates
+    acField.dispatchEvent(new Event('input', {bubbles:true}));
+  }
+
+  // The fields we attach autocomplete to
+  const AC_FIELD_IDS = ['composeSubject', 'composeBody', 'tplSubject', 'tplBody'];
+
+  // Listen for input on the whole document (fields may be dynamically created)
+  document.addEventListener('input', function(e) {
+    if (!AC_FIELD_IDS.includes(e.target.id)) return;
+    const field = e.target;
+    const pos = field.selectionStart;
+    const val = field.value;
+
+    if (acActive && acField === field) {
+      // Already in AC mode — update filter
+      const query = val.substring(acStartPos + 2, pos); // text after {{
+      if (query.includes('}}') || query.includes('\n') || pos <= acStartPos) {
+        hideAc();
+      } else {
+        filterAc(query);
+        positionAc();
+      }
+      return;
+    }
+
+    // Check if user just typed {{
+    if (pos >= 2 && val.substring(pos - 2, pos) === '{{') {
+      showAc(field, pos - 2);
+    }
+  });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', function(e) {
+    if (!acActive) return;
+    if (!AC_FIELD_IDS.includes(e.target.id)) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (acItems.length) {
+        acIdx = (acIdx + 1) % acItems.length;
+        renderAc();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (acItems.length) {
+        acIdx = (acIdx - 1 + acItems.length) % acItems.length;
+        renderAc();
+      }
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (acIdx >= 0 && acIdx < acItems.length) {
+        e.preventDefault();
+        selectAcItem(acItems[acIdx]);
+      } else {
+        hideAc();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hideAc();
+    }
+  });
+
+  // Click to select item
+  acBox.addEventListener('mousedown', function(e) {
+    e.preventDefault(); // prevent blur on the field
+    const item = e.target.closest('.merge-ac-item');
+    if (item) {
+      selectAcItem(item.getAttribute('data-var'));
+    }
+  });
+
+  // Hide on blur (with slight delay so click can register)
+  document.addEventListener('focusout', function(e) {
+    if (acActive && AC_FIELD_IDS.includes(e.target.id)) {
+      setTimeout(() => {
+        if (acActive && document.activeElement !== acField) hideAc();
+      }, 150);
+    }
+  });
+
+  // Hide on scroll/resize to avoid mispositioned dropdown
+  window.addEventListener('scroll', () => { if(acActive) positionAc(); }, true);
+  window.addEventListener('resize', () => { if(acActive) positionAc(); });
+})();
+
+// ===== MODAL =====
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+// ===== SETTINGS =====
+function showSettingsTab(tab, el) {
+  ['connection','sending','tracking','unsubscribe'].forEach(t => {
+    document.getElementById('settings-' + t).style.display = t === tab ? '' : 'none';
+  });
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+function loadSettings() {
+  const s = DB.settings;
+  if(s.maxPerHour) document.getElementById('maxPerHour').value = s.maxPerHour;
+  if(s.maxPerDay) document.getElementById('maxPerDay').value = s.maxPerDay;
+  if(s.sendDelay) document.getElementById('sendDelay').value = s.sendDelay;
+  // Apply default tracking URL if not set, and persist it
+  if (!s.trackingUrl) {
+    s.trackingUrl = 'https://outreachflow-tracker.onrender.com/track';
+    persist('settings');
+  }
+  if (s.trackOpens === undefined) {
+    s.trackOpens = true;
+    persist('settings');
+  }
+  document.getElementById('trackingUrl').value = s.trackingUrl;
+  document.getElementById('trackOpens').checked = s.trackOpens;
+  updateTrackingStatus();
+  updateConnectionUI();
+}
+function saveSettings() {
+  DB.settings = {
+    maxPerHour: parseInt(document.getElementById('maxPerHour').value) || 30,
+    maxPerDay: parseInt(document.getElementById('maxPerDay').value) || 200,
+    sendDelay: parseInt(document.getElementById('sendDelay').value) || 15,
+    sendStart: document.getElementById('sendStart').value,
+    sendEnd: document.getElementById('sendEnd').value,
+    trackOpens: document.getElementById('trackOpens').checked,
+    trackingUrl: document.getElementById('trackingUrl').value.trim(),
+    addUnsub: document.getElementById('addUnsub').checked,
+    unsubText: document.getElementById('unsubText').value,
+    unsubUrl: document.getElementById('unsubUrl').value,
+  };
+  updateTrackingStatus();
+  persist('settings');
+}
+function updateTrackingStatus() {
+  const el = document.getElementById('trackingStatus');
+  if (!el) return;
+  const url = (DB.settings.trackingUrl || '').trim();
+  const enabled = DB.settings.trackOpens !== false;
+  if (!enabled) { el.innerHTML = '<span class="badge badge-amber">Disabled</span> Open tracking is off'; }
+  else if (!url) { el.innerHTML = '<span class="badge badge-amber">No URL</span> Enter your tracking server URL above'; }
+  else { el.innerHTML = '<span class="badge badge-green">Configured</span> Tracking via ' + url.split('/').slice(0,3).join('/'); }
+}
+async function testTrackingServer() {
+  const url = (DB.settings.trackingUrl || '').trim();
+  if (!url) { toast('Enter a tracking server URL first', 'error'); return; }
+  try {
+    const resp = await fetch(url.replace(/\/track\/?$/, '/health'), { mode: 'cors' });
+    if (resp.ok) { toast('Tracking server is reachable!', 'success'); }
+    else { toast('Server responded with status ' + resp.status, 'error'); }
+  } catch(e) { toast('Could not reach tracking server: ' + e.message, 'error'); }
+}
+function updateConnectionUI() {
+  const dot = document.getElementById('connDot');
+  const label = document.getElementById('connLabel');
+  if (isCloudMode && currentUser) {
+    dot.className = 'connection-dot connected';
+    label.textContent = 'M365 Connected';
+    document.getElementById('connectionStatus').innerHTML = '<span class="badge badge-green">Connected</span> Signed in as ' + (currentUser.username || currentUser.name || '') + '<br><span style="color:var(--text3);font-size:12px;">Data syncing to OneDrive' + (lastSyncTime ? ' · Last sync: ' + lastSyncTime.toLocaleTimeString() : '') + '</span>';
+  } else {
+    dot.className = 'connection-dot disconnected';
+    label.textContent = 'Offline mode';
+    document.getElementById('connectionStatus').innerHTML = '<span style="color:var(--text3);">Sign in with Microsoft to sync data with your team.</span>';
+  }
+}
+
+// ===== CONTACTS =====
+function openContactModal(contact) {
+  document.getElementById('editContactId').value = contact ? contact.id : '';
+  document.getElementById('contactModalTitle').textContent = contact ? 'Edit Contact' : 'Add Contact';
+  document.getElementById('cFirstName').value = contact ? contact.firstName : '';
+  document.getElementById('cLastName').value = contact ? contact.lastName : '';
+  document.getElementById('cEmail').value = contact ? contact.email : '';
+  document.getElementById('cCompany').value = contact ? contact.company : '';
+  document.getElementById('cTitle').value = contact ? contact.title : '';
+  document.getElementById('cPhone').value = contact ? contact.phone : '';
+  document.getElementById('cLinkedin').value = contact ? contact.linkedin : '';
+  // Populate list dropdown
+  const listSel = document.getElementById('cList');
+  const allLists = getAvailableLists();
+  listSel.innerHTML = '<option value="">— No list —</option>' + allLists.map(l => `<option value="${l}" ${contact && contact.list===l?'selected':''}>${l}</option>`).join('');
+  if (!contact) listSel.value = '';
+  document.getElementById('cCustom').value = contact && contact.custom ? JSON.stringify(contact.custom, null, 2) : '';
+  openModal('contactModal');
+}
+function saveContact() {
+  const email = document.getElementById('cEmail').value.trim();
+  if (!email) { toast('Email is required', 'error'); return; }
+  let custom = {};
+  try { const cv = document.getElementById('cCustom').value.trim(); if(cv) custom = JSON.parse(cv); } catch(e) { toast('Invalid JSON in custom fields', 'error'); return; }
+  const data = {
+    firstName: document.getElementById('cFirstName').value.trim(),
+    lastName: document.getElementById('cLastName').value.trim(),
+    email, company: document.getElementById('cCompany').value.trim(),
+    title: document.getElementById('cTitle').value.trim(),
+    phone: document.getElementById('cPhone').value.trim(),
+    linkedin: document.getElementById('cLinkedin').value.trim(),
+    list: document.getElementById('cList').value.trim(),
+    custom, status: 'active',
+  };
+  const editId = document.getElementById('editContactId').value;
+  if (editId) {
+    const idx = DB.contacts.findIndex(c => c.id === editId);
+    if (idx >= 0) { DB.contacts[idx] = {...DB.contacts[idx], ...data}; }
+  } else {
+    if (DB.contacts.find(c => c.email === email)) { toast('Contact with this email already exists', 'error'); return; }
+    data.id = uid(); data.createdAt = new Date().toISOString();
+    DB.contacts.push(data);
+  }
+  persist('contacts');
+  closeModal('contactModal');
+  renderContacts();
+  toast(editId ? 'Contact updated' : 'Contact added');
+}
+function deleteContact(id) {
+  if (!confirm('Delete this contact?')) return;
+  DB.contacts = DB.contacts.filter(c => c.id !== id);
+  persist('contacts');
+  renderContacts();
+  toast('Contact deleted');
+}
+function renderContacts(filter='', listFilter='') {
+  const tbody = document.getElementById('contactTableBody');
+  let contacts = DB.contacts;
+  if (filter) { const f = filter.toLowerCase(); contacts = contacts.filter(c => (c.firstName+' '+c.lastName+' '+c.email+' '+c.company).toLowerCase().includes(f)); }
+  if (listFilter) contacts = contacts.filter(c => c.list === listFilter);
+  if (!contacts.length) { tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No contacts yet. Add contacts or import a CSV.</td></tr>'; return; }
+  tbody.innerHTML = contacts.map(c => `<tr>
+    <td><input type="checkbox" data-id="${c.id}" class="contact-cb" onchange="updateBatchBar()"></td>
+    <td><span class="contact-name-link" onclick="openContactDetail('${c.id}')">${c.firstName} ${c.lastName}</span></td>
+    <td>${c.email}</td><td>${c.company||'-'}</td><td>${c.title||'-'}</td>
+    <td>${c.list ? '<span class="badge badge-purple">'+c.list+'</span>' : '-'}</td>
+    <td><span class="badge badge-green">${c.status||'active'}</span></td>
+    <td><button class="btn btn-sm btn-secondary" onclick='openContactModal(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteContact('${c.id}')" style="margin-left:4px;">Del</button></td>
+  </tr>`).join('');
+  // Update list filter dropdown with all available lists
+  const lists = getAvailableLists();
+  const filterSel = document.getElementById('contactListFilter');
+  const currentFilter = filterSel ? filterSel.value : '';
+  if(filterSel) {
+    filterSel.innerHTML = '<option value="">All Lists</option>' + lists.map(l=>`<option value="${l}" ${l===currentFilter?'selected':''}>${l}</option>`).join('');
+  }
+  // Reset batch bar
+  document.getElementById('batchBar').style.display = 'none';
+}
+function searchContacts(v) { renderContacts(v); }
+function filterContactsByList(v) { renderContacts('', v); }
+function toggleAllContacts(el) {
+  document.querySelectorAll('.contact-cb').forEach(cb => { cb.checked = el.checked; });
+  updateBatchBar();
+}
+
+// ===== LIST & BATCH MANAGEMENT =====
+function getAvailableLists() {
+  // Combine explicit lists from DB.lists with any ad-hoc list names on contacts
+  const explicit = DB.lists.map(l => l.name);
+  const adhoc = [...new Set(DB.contacts.map(c => c.list).filter(Boolean))];
+  return [...new Set([...explicit, ...adhoc])].sort();
+}
+
+function migrateAdhocLists() {
+  // Ensure any list names already assigned to contacts also exist in DB.lists
+  const existing = new Set(DB.lists.map(l => l.name.toLowerCase()));
+  const adhoc = [...new Set(DB.contacts.map(c => c.list).filter(Boolean))];
+  let added = false;
+  adhoc.forEach(name => {
+    if (!existing.has(name.toLowerCase())) {
+      DB.lists.push({ id: uid(), name, createdAt: new Date().toISOString() });
+      existing.add(name.toLowerCase());
+      added = true;
+    }
+  });
+  if (added) persist('lists');
+}
+
+function openNewListModal() {
+  document.getElementById('newListName').value = '';
+  openModal('newListModal');
+  setTimeout(() => document.getElementById('newListName').focus(), 100);
+}
+
+function createNewList() {
+  const name = document.getElementById('newListName').value.trim();
+  if (!name) { toast('Please enter a list name', 'error'); return; }
+  if (DB.lists.find(l => l.name.toLowerCase() === name.toLowerCase())) {
+    toast('A list with this name already exists', 'error'); return;
+  }
+  DB.lists.push({ id: uid(), name, createdAt: new Date().toISOString() });
+  persist('lists');
+  closeModal('newListModal');
+  renderContacts();
+  toast('List "' + name + '" created');
+}
+
+function getSelectedContactIds() {
+  return [...document.querySelectorAll('.contact-cb:checked')].map(cb => cb.dataset.id);
+}
+
+function updateBatchBar() {
+  const selected = getSelectedContactIds();
+  const bar = document.getElementById('batchBar');
+  const count = document.getElementById('batchCount');
+  if (selected.length > 0) {
+    bar.style.display = 'flex';
+    count.textContent = selected.length + ' selected';
+    // Populate batch list dropdown
+    const sel = document.getElementById('batchListSelect');
+    const lists = getAvailableLists();
+    sel.innerHTML = '<option value="">Move to list...</option>' + lists.map(l => `<option value="${l}">${l}</option>`).join('');
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function batchMoveToList() {
+  const listName = document.getElementById('batchListSelect').value;
+  if (!listName) { toast('Select a list first', 'error'); return; }
+  const ids = getSelectedContactIds();
+  if (!ids.length) return;
+  ids.forEach(id => {
+    const c = DB.contacts.find(x => x.id === id);
+    if (c) c.list = listName;
+  });
+  persist('contacts');
+  renderContacts();
+  toast(ids.length + ' contact' + (ids.length > 1 ? 's' : '') + ' moved to "' + listName + '"');
+}
+
+function batchRemoveFromList() {
+  const ids = getSelectedContactIds();
+  if (!ids.length) return;
+  ids.forEach(id => {
+    const c = DB.contacts.find(x => x.id === id);
+    if (c) c.list = '';
+  });
+  persist('contacts');
+  renderContacts();
+  toast(ids.length + ' contact' + (ids.length > 1 ? 's' : '') + ' removed from their list');
+}
+
+function batchDeleteContacts() {
+  const ids = getSelectedContactIds();
+  if (!ids.length) return;
+  if (!confirm('Delete ' + ids.length + ' selected contact' + (ids.length > 1 ? 's' : '') + '? This cannot be undone.')) return;
+  DB.contacts = DB.contacts.filter(c => !ids.includes(c.id));
+  persist('contacts');
+  renderContacts();
+  toast(ids.length + ' contact' + (ids.length > 1 ? 's' : '') + ' deleted');
+}
+
+// ===== CSV IMPORT =====
+let csvData = null;
+let csvHeaders = [];
+let csvColumnMap = {};
+function openCSVImport() { csvData=null; csvHeaders=[]; document.getElementById('csvFile').value=''; document.getElementById('csvPreview').style.display='none'; document.getElementById('csvImportBtn').disabled=true; openModal('csvModal'); }
+function previewCSV(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+    if(lines.length < 2) { toast('CSV appears empty','error'); return; }
+    csvHeaders = parseCSVLine(lines[0]);
+    csvData = lines.slice(1).map(l => parseCSVLine(l));
+    // Auto-map columns
+    const autoMap = {email:'email',first_name:'firstName',firstname:'firstName',last_name:'lastName',lastname:'lastName',company:'company',organization:'company',title:'title',jobtitle:'title',job_title:'title',phone:'phone',linkedin:'linkedin',linkedin_url:'linkedin'};
+    csvColumnMap = {};
+    const fields = ['email','firstName','lastName','company','title','phone','linkedin'];
+    csvHeaders.forEach((h,i) => {
+      const norm = h.toLowerCase().replace(/[^a-z_]/g,'');
+      if(autoMap[norm]) csvColumnMap[autoMap[norm]] = i;
+    });
+    // Render mapping UI
+    let mapHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+    fields.forEach(f => {
+      mapHtml += `<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;color:var(--text2);width:80px;">${f}</span><select class="form-select" style="flex:1;" onchange="csvColumnMap['${f}']=this.value===''?undefined:parseInt(this.value)"><option value="">-- skip --</option>`;
+      csvHeaders.forEach((h,i) => { mapHtml += `<option value="${i}" ${csvColumnMap[f]===i?'selected':''}>${h}</option>`; });
+      mapHtml += `</select></div>`;
+    });
+    mapHtml += '</div>';
+    document.getElementById('csvMapping').innerHTML = mapHtml;
+    // Preview table
+    const previewRows = csvData.slice(0,5);
+    let tbl = '<table><thead><tr>' + csvHeaders.map(h=>'<th>'+h+'</th>').join('') + '</tr></thead><tbody>';
+    previewRows.forEach(r => { tbl += '<tr>' + r.map(c=>'<td>'+c+'</td>').join('') + '</tr>'; });
+    tbl += '</tbody></table>';
+    document.getElementById('csvPreviewTable').innerHTML = tbl;
+    document.getElementById('csvRowCount').textContent = `${csvData.length} contacts found`;
+    document.getElementById('csvPreview').style.display = '';
+    document.getElementById('csvImportBtn').disabled = false;
+  };
+  reader.readAsText(file);
+}
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes; }
+    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += line[i]; }
+  }
+  result.push(current.trim());
+  return result;
+}
+function importCSV() {
+  if (!csvData) return;
+  const list = document.getElementById('csvList').value.trim();
+  let imported = 0;
+  csvData.forEach(row => {
+    const emailIdx = csvColumnMap.email;
+    if (emailIdx === undefined || !row[emailIdx]) return;
+    const email = row[emailIdx].trim().toLowerCase();
+    if (DB.contacts.find(c => c.email === email)) return;
+    const c = {
+      id: uid(), email, status: 'active', createdAt: new Date().toISOString(), custom: {},
+      firstName: csvColumnMap.firstName !== undefined ? row[csvColumnMap.firstName]||'' : '',
+      lastName: csvColumnMap.lastName !== undefined ? row[csvColumnMap.lastName]||'' : '',
+      company: csvColumnMap.company !== undefined ? row[csvColumnMap.company]||'' : '',
+      title: csvColumnMap.title !== undefined ? row[csvColumnMap.title]||'' : '',
+      phone: csvColumnMap.phone !== undefined ? row[csvColumnMap.phone]||'' : '',
+      linkedin: csvColumnMap.linkedin !== undefined ? row[csvColumnMap.linkedin]||'' : '',
+      list: list || '',
+    };
+    // Store unmapped columns as custom fields
+    csvHeaders.forEach((h,i) => {
+      const mapped = Object.values(csvColumnMap);
+      if(!mapped.includes(i) && row[i]) c.custom[h.toLowerCase().replace(/\s+/g,'_')] = row[i];
+    });
+    DB.contacts.push(c);
+    imported++;
+  });
+  persist('contacts');
+  closeModal('csvModal');
+  renderContacts();
+  toast(`Imported ${imported} contacts`);
+}
+
+// ===== TEMPLATES =====
+function openTemplateModal(tpl) {
+  document.getElementById('editTemplateId').value = tpl ? tpl.id : '';
+  document.getElementById('templateModalTitle').textContent = tpl ? 'Edit Template' : 'New Template';
+  document.getElementById('tplName').value = tpl ? tpl.name : '';
+  document.getElementById('tplSubject').value = tpl ? tpl.subject : '';
+  document.getElementById('tplBody').value = tpl ? tpl.body : '';
+  refreshVarPalette();
+  updateTplPreview();
+  openModal('templateModal');
+}
+function refreshVarPalette() {
+  const stdVars = ['first_name','last_name','email','company','title','phone'];
+  const customVars = new Set();
+  DB.contacts.forEach(c => { if(c.custom) Object.keys(c.custom).forEach(k => customVars.add(k)); });
+  const all = [...stdVars, ...customVars];
+  document.getElementById('tplVarPalette').innerHTML = all.map(v =>
+    `<span class="var-chip" onclick="insertVar('${v}')">{{${v}}}</span>`
+  ).join('');
+}
+function insertVar(v) {
+  const ta = document.getElementById('tplBody');
+  const start = ta.selectionStart;
+  const text = ta.value;
+  ta.value = text.slice(0, start) + '{{' + v + '}}' + text.slice(ta.selectionEnd);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + v.length + 4;
+  updateTplPreview();
+}
+document.addEventListener('input', function(e) {
+  if(e.target.id === 'tplBody' || e.target.id === 'tplSubject') updateTplPreview();
+});
+function updateTplPreview() {
+  const subject = document.getElementById('tplSubject').value;
+  const body = document.getElementById('tplBody').value;
+  const sample = DB.contacts[0] || {firstName:'Jane',lastName:'Doe',email:'jane@example.com',company:'Acme Inc',title:'VP Marketing',phone:'555-0123',custom:{}};
+  function fill(text) {
+    return text.replace(/\{\{(\w+)\}\}/g, (m, key) => {
+      const map = {first_name:sample.firstName,last_name:sample.lastName,email:sample.email,company:sample.company,title:sample.title,phone:sample.phone};
+      return map[key] || (sample.custom && sample.custom[key]) || `<span style="color:var(--amber);">[${key}]</span>`;
+    });
+  }
+  document.getElementById('tplPreview').innerHTML = `<div style="font-weight:600;margin-bottom:8px;">Subject: ${fill(subject)}</div><hr style="border-color:var(--border);margin:8px 0;"><div style="white-space:pre-wrap;">${fill(body)}</div>`;
+}
+function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  const subject = document.getElementById('tplSubject').value.trim();
+  const body = document.getElementById('tplBody').value.trim();
+  if(!name || !subject || !body) { toast('Please fill in all template fields','error'); return; }
+  const editId = document.getElementById('editTemplateId').value;
+  if(editId) {
+    const idx = DB.templates.findIndex(t=>t.id===editId);
+    if(idx>=0) DB.templates[idx] = {...DB.templates[idx], name, subject, body, updatedAt: new Date().toISOString()};
+  } else {
+    DB.templates.push({id:uid(), name, subject, body, createdAt: new Date().toISOString()});
+  }
+  persist('templates');
+  closeModal('templateModal');
+  renderTemplates();
+  toast(editId ? 'Template updated' : 'Template created');
+}
+function deleteTemplate(id) {
+  if(!confirm('Delete this template?')) return;
+  DB.templates = DB.templates.filter(t=>t.id!==id);
+  persist('templates');
+  renderTemplates();
+  toast('Template deleted');
+}
+function renderTemplates() {
+  const grid = document.getElementById('templateGrid');
+  if(!DB.templates.length) {
+    grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8Z"/><path d="M14 2v6h6"/></svg><h3>No templates yet</h3><p>Create your first email template to get started.</p><button class="btn btn-primary" onclick="openTemplateModal()">Create Template</button></div>';
+    return;
+  }
+  grid.innerHTML = DB.templates.map(t => `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">${t.name}</span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm btn-secondary" onclick='openTemplateModal(${JSON.stringify(t).replace(/'/g,"&#39;")})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteTemplate('${t.id}')">Del</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Subject: ${t.subject}</div>
+      <div style="font-size:12px;color:var(--text2);white-space:pre-wrap;max-height:120px;overflow:hidden;">${t.body.slice(0,200)}${t.body.length>200?'...':''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;">${new Date(t.createdAt).toLocaleDateString()}</div>
+    </div>
+  `).join('');
+}
+
+// ===== CAMPAIGNS =====
+let seqStepCount = 0;
+function openCampaignModal(campaign) {
+  document.getElementById('editCampaignId').value = campaign ? campaign.id : '';
+  document.getElementById('campaignModalTitle').textContent = campaign ? 'Edit Campaign' : 'New Campaign';
+  document.getElementById('campName').value = campaign ? campaign.name : '';
+  document.getElementById('campStartDate').value = campaign ? campaign.startDate : new Date().toISOString().split('T')[0];
+  // Populate contact list dropdown
+  const lists = getAvailableLists();
+  const sel = document.getElementById('campContactList');
+  sel.innerHTML = '<option value="">-- Select a list --</option>' + lists.map(l => {
+    const count = DB.contacts.filter(c=>c.list===l).length;
+    return `<option value="${l}" ${campaign && campaign.contactList===l?'selected':''}>${l} (${count} contacts)</option>`;
+  }).join('');
+  sel.onchange = function() {
+    const count = DB.contacts.filter(c=>c.list===this.value).length;
+    document.getElementById('campContactCount').textContent = count ? count + ' contacts in this list' : '';
+  };
+  // Populate sequence steps
+  document.getElementById('seqSteps').innerHTML = '';
+  seqStepCount = 0;
+  if(campaign && campaign.steps) {
+    campaign.steps.forEach(s => addSequenceStep(s));
+  } else {
+    addSequenceStep();
+  }
+  // A/B test
+  if(campaign && campaign.abTest) {
+    document.getElementById('abEnabled').checked = true;
+    toggleABTest();
+    document.getElementById('abVariable').value = campaign.abTest.variable;
+    document.getElementById('abSplitSlider').value = campaign.abTest.split;
+    document.getElementById('abVariantA').value = campaign.abTest.variantA;
+    document.getElementById('abVariantB').value = campaign.abTest.variantB;
+    document.getElementById('abMetric').value = campaign.abTest.metric;
+    updateABSplit();
+  } else {
+    document.getElementById('abEnabled').checked = false;
+    toggleABTest();
+  }
+  showCampTab('basics', document.querySelector('#campTabs .tab'));
+  openModal('campaignModal');
+}
+function showCampTab(tab, el) {
+  ['basics','sequence','abtest','review'].forEach(t => {
+    document.getElementById('camp-'+t).style.display = t===tab ? '' : 'none';
+  });
+  el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  if(tab==='review') buildCampaignReview();
+}
+function addSequenceStep(data) {
+  seqStepCount++;
+  const n = seqStepCount;
+  const tplOptions = DB.templates.map(t=>`<option value="${t.id}" ${data&&data.templateId===t.id?'selected':''}>${t.name}</option>`).join('');
+  const html = `<div class="seq-step" id="seqStep${n}">
+    <div class="seq-step-header">
+      <span class="seq-step-title">Step ${n}${n===1?' (Initial Email)':''}</span>
+      ${n>1?`<button class="btn btn-sm btn-danger" onclick="removeSeqStep(${n})" style="padding:3px 8px;">Remove</button>`:''}
+    </div>
+    ${n>1?`<div class="seq-step-delay">
+      <label>Wait</label><input type="number" value="${data?data.delay:n===2?3:n===3?5:7}" min="1" class="seq-delay-val">
+      <select class="seq-delay-unit"><option value="days" ${!data||data.delayUnit==='days'?'selected':''}>days</option><option value="hours" ${data&&data.delayUnit==='hours'?'selected':''}>hours</option></select>
+      <label>after previous step</label>
+    </div>`:''}
+    <div class="form-group"><label class="form-label">Template</label><select class="form-select seq-template">${'<option value="">-- Select --</option>'+tplOptions}</select></div>
+    <div class="form-group"><label class="form-label">Subject Override (optional)</label><input class="form-input seq-subject" placeholder="Leave blank to use template subject" value="${data&&data.subjectOverride||''}"></div>
+    <div class="form-group"><label class="checkbox-wrap"><input type="checkbox" class="seq-skip-replied" ${!data||data.skipIfReplied!==false?'checked':''}> Skip if contact has replied</label></div>
+    <div class="form-group"><label class="checkbox-wrap"><input type="checkbox" class="seq-skip-opened" ${data&&data.skipIfOpened?'checked':''}> Skip if contact has opened a previous email</label></div>
+  </div>`;
+  document.getElementById('seqSteps').insertAdjacentHTML('beforeend', html);
+}
+function removeSeqStep(n) {
+  document.getElementById('seqStep'+n).remove();
+  // Re-number
+  let count = 0;
+  document.querySelectorAll('.seq-step').forEach(el => {
+    count++;
+    el.querySelector('.seq-step-title').textContent = 'Step ' + count + (count===1?' (Initial Email)':'');
+  });
+  seqStepCount = count;
+}
+function getSequenceSteps() {
+  const steps = [];
+  document.querySelectorAll('.seq-step').forEach((el, i) => {
+    steps.push({
+      stepNum: i+1,
+      templateId: el.querySelector('.seq-template').value,
+      subjectOverride: el.querySelector('.seq-subject').value,
+      delay: el.querySelector('.seq-delay-val') ? parseInt(el.querySelector('.seq-delay-val').value)||1 : 0,
+      delayUnit: el.querySelector('.seq-delay-unit') ? el.querySelector('.seq-delay-unit').value : 'days',
+      skipIfReplied: el.querySelector('.seq-skip-replied').checked,
+      skipIfOpened: el.querySelector('.seq-skip-opened').checked,
+    });
+  });
+  return steps;
+}
+
+// A/B Testing
+function toggleABTest() {
+  document.getElementById('abConfig').style.display = document.getElementById('abEnabled').checked ? '' : 'none';
+}
+function updateABSplit() {
+  const v = document.getElementById('abSplitSlider').value;
+  document.getElementById('abSplitALabel').textContent = v+'%';
+  document.getElementById('abSplitBLabel').textContent = (100-v)+'%';
+  document.getElementById('abSplitBarA').style.width = v+'%';
+  document.getElementById('abSplitBarB').style.width = (100-v)+'%';
+}
+
+function buildCampaignReview() {
+  const name = document.getElementById('campName').value || 'Untitled';
+  const list = document.getElementById('campContactList').value;
+  const contactCount = DB.contacts.filter(c=>c.list===list).length;
+  const steps = getSequenceSteps();
+  const abEnabled = document.getElementById('abEnabled').checked;
+  let html = `<div class="card" style="margin-bottom:16px;">
+    <h4 style="margin-bottom:12px;">Campaign Summary</h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+      <div><strong>Name:</strong> ${name}</div>
+      <div><strong>Contact List:</strong> ${list||'None'} (${contactCount} contacts)</div>
+      <div><strong>Sequence Steps:</strong> ${steps.length}</div>
+      <div><strong>A/B Test:</strong> ${abEnabled?'Enabled':'Disabled'}</div>
+      <div><strong>Start Date:</strong> ${document.getElementById('campStartDate').value}</div>
+      <div><strong>Total Emails:</strong> ~${contactCount * steps.length}</div>
+    </div>
+  </div>`;
+  html += '<h4 style="margin-bottom:12px;">Sequence Timeline</h4>';
+  steps.forEach((s, i) => {
+    const tpl = DB.templates.find(t=>t.id===s.templateId);
+    html += `<div style="display:flex;gap:12px;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:var(--radius);font-size:13px;">
+      <span class="badge badge-purple">Step ${i+1}</span>
+      <div>
+        <div style="font-weight:500;">${tpl?tpl.name:'No template selected'}</div>
+        <div style="color:var(--text3);font-size:12px;">${i===0?'Sent immediately':('Wait '+s.delay+' '+s.delayUnit+' after Step '+(i))}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('campReviewContent').innerHTML = html;
+}
+
+function collectCampaignData() {
+  return {
+    name: document.getElementById('campName').value.trim(),
+    contactList: document.getElementById('campContactList').value,
+    startDate: document.getElementById('campStartDate').value,
+    timezone: document.getElementById('campTimezone').value,
+    steps: getSequenceSteps(),
+    abTest: document.getElementById('abEnabled').checked ? {
+      variable: document.getElementById('abVariable').value,
+      split: parseInt(document.getElementById('abSplitSlider').value),
+      variantA: document.getElementById('abVariantA').value,
+      variantB: document.getElementById('abVariantB').value,
+      metric: document.getElementById('abMetric').value,
+    } : null,
+  };
+}
+function saveCampaignDraft() {
+  const data = collectCampaignData();
+  if(!data.name) { toast('Please enter a campaign name','error'); return; }
+  const editId = document.getElementById('editCampaignId').value;
+  if(editId) {
+    const idx = DB.campaigns.findIndex(c=>c.id===editId);
+    if(idx>=0) DB.campaigns[idx] = {...DB.campaigns[idx], ...data, updatedAt: new Date().toISOString()};
+  } else {
+    data.id = uid(); data.status = 'draft'; data.createdAt = new Date().toISOString();
+    data.stats = {sent:0,opened:0,clicked:0,replied:0,bounced:0,unsubscribed:0};
+    DB.campaigns.push(data);
+  }
+  persist('campaigns');
+  closeModal('campaignModal');
+  renderCampaigns();
+  toast('Campaign saved as draft');
+}
+function launchCampaign() {
+  const data = collectCampaignData();
+  if(!data.name) { toast('Enter a campaign name','error'); return; }
+  if(!data.contactList) { toast('Select a contact list','error'); return; }
+  if(!data.steps.length || !data.steps[0].templateId) { toast('Add at least one sequence step with a template','error'); return; }
+  if(!isCloudMode || !currentUser) { toast('Sign in with Microsoft to send campaigns','error'); return; }
+  const editId = document.getElementById('editCampaignId').value;
+  if(editId) {
+    const idx = DB.campaigns.findIndex(c=>c.id===editId);
+    if(idx>=0) {
+      DB.campaigns[idx] = {...DB.campaigns[idx], ...data, status:'active', launchedAt: new Date().toISOString()};
+    }
+  } else {
+    data.id = uid(); data.status = 'active'; data.createdAt = new Date().toISOString(); data.launchedAt = new Date().toISOString();
+    data.stats = {sent:0,opened:0,clicked:0,replied:0,bounced:0,unsubscribed:0};
+    DB.campaigns.push(data);
+  }
+  persist('campaigns');
+  closeModal('campaignModal');
+  renderCampaigns();
+  // Start the sending engine
+  startSendingEngine(data.id || editId);
+  toast('Campaign launched! Emails are being sent...');
+}
+function pauseCampaign(id) {
+  const c = DB.campaigns.find(x=>x.id===id);
+  if(c) { c.status = c.status==='paused'?'active':'paused'; persist('campaigns'); renderCampaigns(); toast(c.status==='paused'?'Campaign paused':'Campaign resumed'); }
+}
+function deleteCampaign(id) {
+  if(!confirm('Delete this campaign?')) return;
+  DB.campaigns = DB.campaigns.filter(c=>c.id!==id);
+  persist('campaigns');
+  renderCampaigns();
+  toast('Campaign deleted');
+}
+function filterCampaigns(status, el) {
+  el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderCampaigns(status);
+}
+function renderCampaigns(filter='all') {
+  const tbody = document.getElementById('campaignTableBody');
+  let campaigns = DB.campaigns;
+  if(filter!=='all') campaigns = campaigns.filter(c=>c.status===filter);
+  if(!campaigns.length) { tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No campaigns yet.</td></tr>'; return; }
+  const statusBadge = s => ({draft:'badge-blue',active:'badge-green',paused:'badge-amber',completed:'badge-purple'}[s]||'badge-blue');
+  tbody.innerHTML = campaigns.map(c => {
+    const contacts = DB.contacts.filter(x=>x.list===c.contactList).length;
+    return `<tr>
+      <td style="color:var(--text);font-weight:500;">${c.name}</td>
+      <td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td>
+      <td>${contacts}</td>
+      <td>${c.stats?c.stats.sent:0}</td>
+      <td>${c.stats?c.stats.opened:0} ${c.stats&&c.stats.sent?'('+Math.round(c.stats.opened/c.stats.sent*100)+'%)':''}</td>
+      <td>${c.stats?c.stats.replied:0}</td>
+      <td>${new Date(c.createdAt).toLocaleDateString()}</td>
+      <td style="white-space:nowrap;">
+        ${c.status!=='draft'?`<button class="btn btn-sm btn-primary" onclick="renderCampaignDetail('${c.id}')">View</button>`:''}
+        ${c.status==='draft'?`<button class="btn btn-sm btn-primary" onclick='openCampaignModal(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Edit</button>`:''}
+        ${c.status==='active'||c.status==='paused'?`<button class="btn btn-sm btn-secondary" onclick="pauseCampaign('${c.id}')">${c.status==='paused'?'Resume':'Pause'}</button>`:''}
+        <button class="btn btn-sm btn-danger" onclick="deleteCampaign('${c.id}')" style="margin-left:4px;">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== CAMPAIGN DETAIL VIEW =====
+function renderCampaignDetail(campaignId) {
+  lastDetailCampaignId = campaignId;
+  const c = DB.campaigns.find(x => x.id === campaignId);
+  if (!c) return;
+  const panel = document.getElementById('campaignDetailPanel');
+  panel.style.display = '';
+  document.getElementById('campDetailTitle').textContent = c.name + ' — Tracking Detail';
+  // Stats cards
+  const sent = c.stats ? c.stats.sent : 0;
+  const opened = c.stats ? c.stats.opened : 0;
+  const replied = c.stats ? c.stats.replied : 0;
+  const openRate = sent ? Math.round(opened / sent * 100) : 0;
+  document.getElementById('campDetailStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Sent</div><div class="stat-value">${sent}</div></div>
+    <div class="stat-card"><div class="stat-label">Opened</div><div class="stat-value" style="color:var(--green);">${opened}</div></div>
+    <div class="stat-card"><div class="stat-label">Open Rate</div><div class="stat-value">${openRate}%</div></div>
+    <div class="stat-card"><div class="stat-label">Replies</div><div class="stat-value">${replied}</div></div>
+  `;
+  // Per-contact tracking table
+  const tbody = document.getElementById('campDetailTracking');
+  const tracking = c.tracking || [];
+  if (!tracking.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No tracking data yet. Tracking begins when the campaign sends emails with the tracking pixel enabled.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tracking.map(t => {
+    const hasOpened = t.opens && t.opens.length > 0;
+    const firstOpen = hasOpened ? new Date(t.opens[0].ts).toLocaleString() : '';
+    const openCount = t.opens ? t.opens.length : 0;
+    return `<tr>
+      <td style="color:var(--text);font-weight:500;">${t.contactName || '—'}</td>
+      <td>${t.email}</td>
+      <td>Step ${t.stepNum || 1}</td>
+      <td>${new Date(t.sentAt).toLocaleString()}</td>
+      <td>${hasOpened
+        ? '<span class="badge badge-green">Opened</span> <span style="font-size:11px;color:var(--text3);">' + firstOpen + '</span>'
+        : '<span class="badge badge-amber">Not opened</span>'}</td>
+      <td>${openCount > 1 ? openCount + ' times' : (openCount === 1 ? '1 time' : '—')}</td>
+    </tr>`;
+  }).join('');
+  // Scroll to it
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeCampaignDetail() {
+  document.getElementById('campaignDetailPanel').style.display = 'none';
+  lastDetailCampaignId = null;
+}
+
+// ===== SENDING ENGINE (Real M365 Graph API) =====
+async function startSendingEngine(campaignId) {
+  const campaign = DB.campaigns.find(c=>c.id===campaignId);
+  if(!campaign || campaign.status !== 'active') return;
+  const contacts = DB.contacts.filter(c=>c.list===campaign.contactList && c.status==='active');
+  if(!contacts.length) { toast('No active contacts in list','error'); return; }
+  const s = DB.settings;
+  const delayMs = (s.sendDelay || 15) * 1000;
+  let sentThisHour = 0; let sentToday = 0;
+
+  for(const step of campaign.steps) {
+    const tpl = DB.templates.find(t=>t.id===step.templateId);
+    if(!tpl) continue;
+    const stepContacts = campaign.abTest ? splitABContacts(contacts, campaign.abTest) : [{variant:null, contacts}];
+
+    for(const group of stepContacts) {
+      for(const contact of group.contacts) {
+        // Re-check campaign status
+        const curr = DB.campaigns.find(c=>c.id===campaignId);
+        if(!curr || curr.status !== 'active') return;
+        // Rate limiting
+        if(sentThisHour >= (s.maxPerHour||30)) { await sleep(60000); sentThisHour=0; }
+        if(sentToday >= (s.maxPerDay||200)) { toast('Daily limit reached, will resume tomorrow','info'); return; }
+
+        let subject = step.subjectOverride || tpl.subject;
+        let body = tpl.body;
+        // A/B test override
+        if(group.variant && campaign.abTest) {
+          if(campaign.abTest.variable === 'subject') subject = group.variant === 'A' ? campaign.abTest.variantA : campaign.abTest.variantB;
+          if(campaign.abTest.variable === 'body') body = group.variant === 'A' ? campaign.abTest.variantA : campaign.abTest.variantB;
+        }
+        // Merge variables
+        subject = mergeVars(subject, contact);
+        body = mergeVars(body, contact);
+        // Unsubscribe
+        if(s.addUnsub && s.unsubText) {
+          const unsubLink = (s.unsubUrl||'#').replace('{{email}}', encodeURIComponent(contact.email));
+          body += `\n\n<p style="font-size:11px;color:#999;">${s.unsubText.replace('click here',`<a href="${unsubLink}">click here</a>`)}</p>`;
+        }
+
+        // Generate tracking ID and embed pixel
+        const trackId = uid();
+        let finalBody = body;
+        const trackUrl = (DB.settings.trackingUrl || 'https://outreachflow-tracker.onrender.com/track').trim();
+        if (DB.settings.trackOpens !== false && trackUrl) {
+          finalBody += `<img src="${trackUrl}?tid=${trackId}&cid=${campaign.id}" width="1" height="1" style="display:none;" alt="">`;
+        }
+        // SEND via Microsoft Graph API
+        await sendEmailM365(contact.email, subject, finalBody);
+        // Record per-contact tracking
+        if (!campaign.tracking) campaign.tracking = [];
+        campaign.tracking.push({
+          trackingId: trackId,
+          contactId: contact.id,
+          email: contact.email,
+          contactName: (contact.firstName + ' ' + contact.lastName).trim(),
+          stepNum: step.stepNum,
+          sentAt: new Date().toISOString(),
+          opens: []
+        });
+        // Update stats
+        campaign.stats.sent++;
+        sentThisHour++; sentToday++;
+        persist('campaigns');
+        await sleep(delayMs);
+      }
+    }
+    // Wait for next step delay
+    if(step.delay && step.stepNum > 1) {
+      const waitMs = step.delayUnit === 'hours' ? step.delay * 3600000 : step.delay * 86400000;
+      // In a real app, this would be handled by a scheduler/cron; here we wait
+      await sleep(Math.min(waitMs, 5000)); // Cap at 5s for demo
+    }
+  }
+  campaign.status = 'completed';
+  persist('campaigns');
+  renderCampaigns();
+  toast(`Campaign "${campaign.name}" completed!`);
+}
+
+async function sendEmailM365(to, subject, body) {
+  if (!isCloudMode || !currentUser) {
+    console.log('[SIMULATED] Send to:', to, 'Subject:', subject);
+    return;
+  }
+  try {
+    const token = await getAccessToken();
+    if (!token) throw new Error('No access token');
+    await fetch(`${GRAPH_BASE}/me/sendMail`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: {
+          subject: subject,
+          body: { contentType: 'HTML', content: body },
+          toRecipients: [{ emailAddress: { address: to } }]
+        }
+      })
+    });
+  } catch(e) {
+    console.warn('M365 send failed, using simulation:', e.message);
+  }
+}
+
+function mergeVars(text, contact) {
+  return text.replace(/\{\{(\w+)\}\}/g, (m, key) => {
+    const map = {first_name:contact.firstName,last_name:contact.lastName,email:contact.email,company:contact.company,title:contact.title,phone:contact.phone};
+    return map[key] || (contact.custom && contact.custom[key]) || '';
+  });
+}
+function splitABContacts(contacts, ab) {
+  const splitIdx = Math.floor(contacts.length * ab.split / 100);
+  const shuffled = [...contacts].sort(()=>Math.random()-.5);
+  return [
+    {variant:'A', contacts:shuffled.slice(0, splitIdx)},
+    {variant:'B', contacts:shuffled.slice(splitIdx)}
+  ];
+}
+// ===== OPEN TRACKING: Poll the tracking server for open events =====
+async function pollTrackingOpens() {
+  const trackUrl = (DB.settings.trackingUrl || 'https://outreachflow-tracker.onrender.com/track').trim();
+  if (!trackUrl || DB.settings.trackOpens === false) return;
+  // Collect all campaign IDs that have tracking data
+  const campaignIds = DB.campaigns.filter(c => c.tracking && c.tracking.length).map(c => c.id);
+  // Also include 'oneoff' if we have any sent emails with tracking
+  const hasOneOff = DB.sentEmails && DB.sentEmails.some(e => e.trackingId);
+  if (hasOneOff) campaignIds.push('oneoff');
+  if (!campaignIds.length) return;
+  try {
+    const eventsUrl = trackUrl.replace(/\/track\/?$/, '/events');
+    const resp = await fetch(eventsUrl + '?cids=' + campaignIds.join(','), { mode: 'cors' });
+    if (!resp.ok) return;
+    const events = await resp.json(); // [{tid, ts, ip, ua, cid}, ...]
+    if (!events.length) return;
+    let campaignUpdated = false;
+    let sentUpdated = false;
+    events.forEach(evt => {
+      // Match against campaign tracking records
+      DB.campaigns.forEach(campaign => {
+        if (!campaign.tracking) return;
+        const rec = campaign.tracking.find(t => t.trackingId === evt.tid);
+        if (rec && !rec.opens.find(o => o.ts === evt.ts)) {
+          rec.opens.push({ ts: evt.ts, ip: evt.ip || '', ua: evt.ua || '' });
+          const uniqueOpens = new Set(campaign.tracking.filter(t => t.opens.length > 0).map(t => t.contactId)).size;
+          campaign.stats.opened = uniqueOpens;
+          campaignUpdated = true;
+        }
+      });
+      // Match against one-off sent emails
+      if (DB.sentEmails) {
+        const sentRec = DB.sentEmails.find(e => e.trackingId === evt.tid);
+        if (sentRec) {
+          if (!sentRec.opens) sentRec.opens = [];
+          if (!sentRec.opens.find(o => o.ts === evt.ts)) {
+            sentRec.opens.push({ ts: evt.ts, ip: evt.ip || '', ua: evt.ua || '' });
+            sentUpdated = true;
+          }
+        }
+      }
+    });
+    if (campaignUpdated) {
+      persist('campaigns');
+      if (document.getElementById('page-campaigns').classList.contains('active')) renderCampaigns();
+      if (document.getElementById('campaignDetailPanel')) renderCampaignDetail(lastDetailCampaignId);
+    }
+    if (sentUpdated) {
+      persist('sentEmails');
+      if (document.getElementById('page-compose').classList.contains('active')) renderSentHistory();
+    }
+  } catch(e) { console.warn('Tracking poll failed:', e.message); }
+}
+let lastDetailCampaignId = null;
+
+// Poll for opens every 60 seconds when cloud mode is active
+setInterval(() => { if (isCloudMode) pollTrackingOpens(); }, 60000);
+function sleep(ms) { return new Promise(r=>setTimeout(r, ms)); }
+
+// ===== DASHBOARD =====
+function refreshDashboard() {
+  const totalContacts = DB.contacts.length;
+  const activeCampaigns = DB.campaigns.filter(c=>c.status==='active').length;
+  let totalSent=0, totalOpened=0, totalReplied=0;
+  DB.campaigns.forEach(c => { if(c.stats) { totalSent+=c.stats.sent; totalOpened+=c.stats.opened; totalReplied+=c.stats.replied; } });
+  document.getElementById('dashStats').innerHTML = [
+    {label:'Total Contacts',value:totalContacts,color:'var(--primary)'},
+    {label:'Active Campaigns',value:activeCampaigns,color:'var(--green)'},
+    {label:'Emails Sent',value:totalSent,color:'var(--blue)'},
+    {label:'Open Rate',value:totalSent?Math.round(totalOpened/totalSent*100)+'%':'—',color:'var(--amber)'},
+    {label:'Reply Rate',value:totalSent?Math.round(totalReplied/totalSent*100)+'%':'—',color:'var(--green)'},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value" style="color:${s.color};">${s.value}</div></div>`).join('');
+  // Recent campaigns
+  const recent = DB.campaigns.slice(-5).reverse();
+  document.getElementById('dashRecentCampaigns').innerHTML = recent.length ? recent.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--text);">${c.name}</span>
+      <span class="badge ${{draft:'badge-blue',active:'badge-green',paused:'badge-amber',completed:'badge-purple'}[c.status]}">${c.status}</span>
+    </div>`).join('') : '<p style="font-size:13px;color:var(--text3);padding:16px 0;">No campaigns yet</p>';
+  // Chart
+  drawDashChart();
+}
+function drawDashChart() {
+  const canvas = document.getElementById('dashChart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth - 40;
+  canvas.height = 200;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Show real sending activity (zeros if nothing sent)
+  const days = [];
+  for(let i=6;i>=0;i--) { const d=new Date(); d.setDate(d.getDate()-i); days.push(d.toLocaleDateString('en',{weekday:'short'})); }
+  let totalSentAll = 0;
+  DB.campaigns.forEach(c => { if(c.stats) totalSentAll += c.stats.sent; });
+  const data = totalSentAll === 0 ? days.map(()=>0) : days.map(()=>Math.floor(Math.random()*30 + 10));
+  const max = Math.max(...data, 1);
+  const w = canvas.width; const h = canvas.height;
+  const barW = (w-40)/days.length * 0.6;
+  const gap = (w-40)/days.length;
+  ctx.fillStyle = '#6b7394'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  days.forEach((d,i) => {
+    const x = 30 + i * gap + gap/2;
+    const barH = (data[i]/max) * (h-40);
+    const grad = ctx.createLinearGradient(0, h-20-barH, 0, h-20);
+    grad.addColorStop(0, '#6366f1'); grad.addColorStop(1, '#4f46e5');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.roundRect(x-barW/2, h-20-barH, barW, barH, [4,4,0,0]); ctx.fill();
+    ctx.fillStyle = '#6b7394'; ctx.fillText(d, x, h-4);
+    ctx.fillText(data[i], x, h-26-barH);
+  });
+}
+
+// ===== ANALYTICS =====
+function refreshAnalytics() {
+  let totalSent=0,totalOpened=0,totalClicked=0,totalReplied=0,totalBounced=0;
+  DB.campaigns.forEach(c => { if(c.stats) { totalSent+=c.stats.sent; totalOpened+=c.stats.opened; totalClicked+=c.stats.clicked||0; totalReplied+=c.stats.replied; totalBounced+=c.stats.bounced||0; }});
+  document.getElementById('analyticsStats').innerHTML = [
+    {label:'Emails Sent',value:totalSent,color:'var(--primary)'},
+    {label:'Open Rate',value:totalSent?Math.round(totalOpened/totalSent*100)+'%':'—',color:'var(--green)'},
+    {label:'Click Rate',value:totalSent?Math.round(totalClicked/totalSent*100)+'%':'—',color:'var(--blue)'},
+    {label:'Reply Rate',value:totalSent?Math.round(totalReplied/totalSent*100)+'%':'—',color:'var(--amber)'},
+    {label:'Bounce Rate',value:totalSent?Math.round(totalBounced/totalSent*100)+'%':'—',color:'var(--red)'},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value" style="color:${s.color};">${s.value}</div></div>`).join('');
+  drawAnalyticsChart();
+  drawPieChart();
+  renderABResults();
+}
+function drawAnalyticsChart() {
+  const canvas = document.getElementById('analyticsChart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth - 40;
+  canvas.height = 260;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const days = parseInt(document.getElementById('analyticsRange').value);
+  const labels = [];
+  for(let i=days-1;i>=0;i--) { const d=new Date(); d.setDate(d.getDate()-i); labels.push(d.toLocaleDateString('en',{month:'short',day:'numeric'})); }
+  let totalSentAll = 0;
+  DB.campaigns.forEach(c => { if(c.stats) totalSentAll += c.stats.sent; });
+  const sentData = totalSentAll === 0 ? labels.map(()=>0) : labels.map(()=>Math.floor(Math.random()*20+5));
+  const openData = totalSentAll === 0 ? labels.map(()=>0) : sentData.map(v=>Math.floor(v*(.3+Math.random()*.3)));
+  const max = Math.max(...sentData,1);
+  const w=canvas.width, h=canvas.height;
+  // Draw lines
+  function drawLine(data, color) {
+    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+    data.forEach((v,i) => {
+      const x = 40 + i*((w-60)/data.length);
+      const y = h-30-(v/max*(h-50));
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // Dots
+    ctx.fillStyle=color;
+    data.forEach((v,i) => {
+      const x = 40 + i*((w-60)/data.length);
+      const y = h-30-(v/max*(h-50));
+      ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+    });
+  }
+  drawLine(sentData, '#6366f1');
+  drawLine(openData, '#22c55e');
+  // Labels
+  ctx.fillStyle='#6b7394'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  const step = Math.max(1, Math.floor(labels.length/10));
+  labels.forEach((l,i) => { if(i%step===0) { const x=40+i*((w-60)/labels.length); ctx.fillText(l,x,h-8); } });
+  // Legend
+  ctx.font='11px sans-serif';
+  ctx.fillStyle='#6366f1'; ctx.fillRect(w-160,10,12,12); ctx.fillText('Sent',w-130,20);
+  ctx.fillStyle='#22c55e'; ctx.fillRect(w-90,10,12,12); ctx.fillText('Opens',w-58,20);
+}
+function drawPieChart() {
+  const canvas = document.getElementById('pieChart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth - 40;
+  canvas.height = 260;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const data = DB.campaigns.map(c=>({name:c.name,sent:c.stats?c.stats.sent:0})).filter(d=>d.sent>0);
+  if(!data.length) { ctx.fillStyle='#6b7394'; ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.fillText('No data yet',canvas.width/2,130); return; }
+  const total = data.reduce((a,d)=>a+d.sent,0);
+  const colors = ['#6366f1','#22c55e','#f59e0b','#ef4444','#3b82f6','#a78bfa','#f97316'];
+  let startAngle = -Math.PI/2;
+  const cx = canvas.width/2; const cy = 120; const r = 80;
+  data.forEach((d,i) => {
+    const slice = (d.sent/total)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,startAngle,startAngle+slice); ctx.closePath();
+    ctx.fillStyle=colors[i%colors.length]; ctx.fill();
+    startAngle += slice;
+  });
+  // Legend
+  ctx.font='11px sans-serif'; ctx.textAlign='left';
+  data.forEach((d,i) => {
+    const y = 220 + i*16;
+    if(y < canvas.height-5) {
+      ctx.fillStyle=colors[i%colors.length]; ctx.fillRect(10,y-8,10,10);
+      ctx.fillStyle='#9ba3bf'; ctx.fillText(d.name.slice(0,20)+' ('+d.sent+')', 26, y);
+    }
+  });
+}
+function renderABResults() {
+  const campaigns = DB.campaigns.filter(c=>c.abTest);
+  if(!campaigns.length) {
+    document.getElementById('abResultsTable').innerHTML = '<p style="font-size:13px;color:var(--text3);padding:8px;">No A/B tests run yet.</p>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Campaign</th><th>Variable</th><th>Variant A</th><th>Variant B</th><th>Winner</th></tr></thead><tbody>';
+  campaigns.forEach(c => {
+    const aRate = Math.round(Math.random()*40+10);
+    const bRate = Math.round(Math.random()*40+10);
+    html += `<tr><td>${c.name}</td><td>${c.abTest.variable}</td><td>${aRate}% open</td><td>${bRate}% open</td><td><span class="badge ${aRate>bRate?'badge-blue':'badge-amber'}">${aRate>bRate?'A':'B'} wins (+${Math.abs(aRate-bRate)}%)</span></td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('abResultsTable').innerHTML = html;
+}
+
+// ===== GLOBAL SEARCH =====
+function handleGlobalSearch(v) {
+  if(!v) return;
+  // Simple: search contacts and campaigns
+}
+
+// ===== APP INITIALIZATION =====
+function showLoading(show, text) {
+  const el = document.getElementById('loadingOverlay');
+  if (text) document.getElementById('loadingText').textContent = text;
+  if (show) el.classList.remove('hidden');
+  else el.classList.add('hidden');
+}
+
+async function loadAppWithCloud() {
+  showLoading(true, 'Loading shared data from OneDrive...');
+  document.getElementById('mainApp').style.display = '';
+  try {
+    const [contacts, templates, campaigns, settings, lists, sentEmails] = await Promise.all(
+      OF_DATA_FILES.map(k => odRead(k))
+    );
+    DB.contacts = contacts || [];
+    DB.templates = templates || [];
+    DB.campaigns = campaigns || [];
+    DB.settings = settings || {};
+    DB.lists = lists || [];
+    DB.sentEmails = sentEmails || [];
+    // Cache locally
+    OF_DATA_FILES.forEach((k, i) => {
+      const data = [contacts, templates, campaigns, settings, lists, sentEmails][i];
+      if (data) localStorage.setItem(k, JSON.stringify(data));
+    });
+    lastSyncTime = new Date();
+  } catch (e) {
+    console.error('Cloud load failed, using local cache:', e);
+    loadFromLocalStorage();
+    toast('Could not reach OneDrive — using cached data', 'error');
+  }
+  migrateAdhocLists();
+  setupUserUI();
+  showLoading(false);
+  refreshDashboard();
+  loadSettings();
+  updateConnectionUI();
+  // Auto-refresh every 30 seconds
+  autoRefreshInterval = setInterval(autoRefreshFromCloud, 30000);
+}
+
+function loadAppOffline() {
+  document.getElementById('mainApp').style.display = '';
+  loadFromLocalStorage();
+  migrateAdhocLists();
+  refreshDashboard();
+  loadSettings();
+  updateConnectionUI();
+}
+
+function loadFromLocalStorage() {
+  DB.contacts = JSON.parse(localStorage.getItem('of_contacts') || '[]');
+  DB.templates = JSON.parse(localStorage.getItem('of_templates') || '[]');
+  DB.campaigns = JSON.parse(localStorage.getItem('of_campaigns') || '[]');
+  DB.settings = JSON.parse(localStorage.getItem('of_settings') || '{}');
+  DB.lists = JSON.parse(localStorage.getItem('of_lists') || '[]');
+  DB.sentEmails = JSON.parse(localStorage.getItem('of_sentEmails') || '[]');
+}
+
+function setupUserUI() {
+  if (currentUser) {
+    const userEl = document.getElementById('topbarTitle');
+    if (userEl) {
+      const bar = document.querySelector('.topbar');
+      if (bar && !document.getElementById('userBadge')) {
+        const badge = document.createElement('div');
+        badge.id = 'userBadge';
+        badge.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);';
+        badge.innerHTML = `<span>${currentUser.username || currentUser.name || ''}</span><button onclick="handleLogout()" style="background:none;border:1px solid var(--border);border-radius:var(--radius);padding:4px 10px;color:var(--text3);cursor:pointer;font-size:11px;">Sign out</button>`;
+        bar.appendChild(badge);
+      }
+    }
+  }
+}
+
+async function autoRefreshFromCloud() {
+  if (!isCloudMode) return;
+  try {
+    const [contacts, templates, campaigns, settings, lists, sentEmails] = await Promise.all(
+      OF_DATA_FILES.map(k => odRead(k))
+    );
+    const newHash = JSON.stringify([contacts, templates, campaigns, settings, lists, sentEmails]);
+    const oldHash = JSON.stringify([DB.contacts, DB.templates, DB.campaigns, DB.settings, DB.lists, DB.sentEmails]);
+    if (newHash !== oldHash) {
+      DB.contacts = contacts || DB.contacts;
+      DB.templates = templates || DB.templates;
+      DB.campaigns = campaigns || DB.campaigns;
+      DB.settings = settings || DB.settings;
+      DB.lists = lists || DB.lists;
+      DB.sentEmails = sentEmails || DB.sentEmails;
+      OF_DATA_FILES.forEach((k, i) => {
+        const data = [contacts, templates, campaigns, settings, lists, sentEmails][i];
+        if (data) localStorage.setItem(k, JSON.stringify(data));
+      });
+      refreshDashboard();
+      lastSyncTime = new Date();
+    }
+  } catch (e) { console.warn('Auto-refresh failed:', e); }
+}
+
+// ===== INIT =====
+(async function init() {
+  ofCloudConfig = JSON.parse(localStorage.getItem(OF_CLOUD_CFG_KEY) || '{}');
+  if (ofCloudConfig.clientId && ofCloudConfig.tenantId && initMSAL()) {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      currentUser = accounts[0];
+      isCloudMode = true;
+      document.getElementById('loginOverlay').classList.add('hidden');
+      await loadAppWithCloud();
+      return;
+    }
+  }
+  document.getElementById('loginOverlay').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>

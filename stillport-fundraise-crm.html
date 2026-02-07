@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stillport Fundraise CRM</title>
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#1a1d27;--bg3:#242836;--bg4:#2e3345;
+  --border:#333850;--text:#e2e5f0;--text2:#9ba3bf;--text3:#6b7394;
+  --primary:#6366f1;--primary-hover:#818cf8;--primary-bg:rgba(99,102,241,.12);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.12);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.12);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.12);
+  --blue:#3b82f6;--blue-bg:rgba(59,130,246,.12);
+  --cyan:#06b6d4;--cyan-bg:rgba(6,182,212,.12);
+  --pink:#ec4899;--pink-bg:rgba(236,72,153,.12);
+  --emerald:#10b981;--emerald-bg:rgba(16,185,129,.12);
+  --radius:8px;--radius-lg:12px;--shadow:0 2px 8px rgba(0,0,0,.3);--transition:.2s ease;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
+button{cursor:pointer;font-family:inherit}input,textarea,select{font-family:inherit}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:240px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-logo{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:17px;font-weight:700;background:linear-gradient(135deg,var(--emerald),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-logo span{font-size:11px;color:var(--text3);display:block;margin-top:2px}
+.sidebar-nav{flex:1;padding:12px;overflow-y:auto}
+.nav-section{margin-bottom:16px}
+.nav-section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);padding:4px 12px;margin-bottom:4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius);color:var(--text2);font-size:13px;cursor:pointer;transition:var(--transition);border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--primary-bg);color:var(--primary);font-weight:600}
+.nav-item svg{width:18px;height:18px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--primary);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;background:var(--bg2)}
+.topbar-title{font-size:16px;font-weight:600}
+.topbar-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.content{flex:1;overflow-y:auto;padding:24px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;border:1px solid transparent;transition:var(--transition)}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-hover)}
+.btn-secondary{background:var(--bg3);color:var(--text);border-color:var(--border)}.btn-secondary:hover{background:var(--bg4)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-success{background:var(--green);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn svg{width:16px;height:16px}
+
+/* Forms */
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;transition:var(--transition)}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-bg)}
+.form-textarea{resize:vertical;min-height:80px}
+.form-hint{font-size:11px;color:var(--text3);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:15px;font-weight:600}
+
+/* Tables */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600}
+th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:20px}
+th.sortable:hover{color:var(--text)}
+th.sortable::after{content:'';position:absolute;right:6px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-bottom-color:var(--text3);margin-top:-5px;opacity:.4}
+th.sortable.asc::after{border-bottom-color:var(--primary);opacity:1}
+th.sortable.desc::after{border-bottom-color:transparent;border-top-color:var(--primary);opacity:1;margin-top:3px}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2)}
+tr:hover td{background:var(--bg3)}
+tr{cursor:pointer}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-amber{background:var(--amber-bg);color:var(--amber)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+.badge-blue{background:var(--blue-bg);color:var(--blue)}
+.badge-purple{background:var(--primary-bg);color:var(--primary)}
+.badge-cyan{background:var(--cyan-bg);color:var(--cyan)}
+.badge-pink{background:var(--pink-bg);color:var(--pink)}
+.badge-emerald{background:var(--emerald-bg);color:var(--emerald)}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px}
+.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:700}
+.stat-sub{font-size:12px;color:var(--text3);margin-top:4px}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:var(--transition)}
+.modal-overlay.active{opacity:1;pointer-events:auto}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);width:90%;max-width:720px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-header h3{font-size:16px;font-weight:600}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.modal-close{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px}
+.modal-close:hover{color:var(--text)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
+.tab{padding:10px 16px;font-size:13px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:var(--transition);background:none;border-top:none;border-left:none;border-right:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+
+/* Kanban */
+.kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;min-height:calc(100vh - 200px)}
+.kanban-col{min-width:260px;max-width:260px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;flex-shrink:0}
+.kanban-col-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.kanban-col-title{font-size:13px;font-weight:600}
+.kanban-col-count{font-size:11px;color:var(--text3);background:var(--bg3);padding:1px 8px;border-radius:10px}
+.kanban-col-body{flex:1;padding:8px;overflow-y:auto;min-height:100px}
+.kanban-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:grab;transition:var(--transition)}
+.kanban-card:hover{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+.kanban-card.dragging{opacity:.5;transform:rotate(2deg)}
+.kanban-card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.kanban-card-sub{font-size:11px;color:var(--text3)}
+.kanban-card-meta{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.kanban-card-amount{font-size:12px;font-weight:600;color:var(--emerald)}
+
+/* Activity Log */
+.activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.activity-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.activity-content{flex:1}
+.activity-text{font-size:13px;color:var(--text2)}
+.activity-time{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* Pages */
+.page{display:none}.page.active{display:block}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.page-header h2{font-size:20px;font-weight:700}
+
+/* Toast */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 16px;border-radius:var(--radius);font-size:13px;box-shadow:var(--shadow);animation:slideIn .3s ease;display:flex;align-items:center;gap:8px}
+.toast-success{background:#065f46;color:#a7f3d0;border:1px solid #059669}
+.toast-error{background:#7f1d1d;color:#fca5a5;border:1px solid #dc2626}
+.toast-info{background:#1e3a5f;color:#93c5fd;border:1px solid #3b82f6}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Search */
+.search-box{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px}
+.search-box input{background:none;border:none;color:var(--text);font-size:13px;outline:none;flex:1}
+.search-box svg{width:16px;height:16px;color:var(--text3)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+/* Detail Panel */
+.detail-panel{display:grid;grid-template-columns:2fr 1fr;gap:20px}
+.detail-sidebar{display:flex;flex-direction:column;gap:16px}
+.field-grid{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;font-size:13px}
+.field-label{color:var(--text3);font-weight:500}
+.field-value{color:var(--text)}
+
+/* Sync badge */
+.sync-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:var(--emerald-bg);color:var(--emerald)}
+
+/* Outreach Activity Panel */
+.of-activity-section{margin-top:20px}
+.of-section-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.of-section-title svg{width:18px;height:18px;color:var(--primary)}
+.of-timeline{position:relative;padding-left:22px}
+.of-timeline::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.of-tl-item{position:relative;margin-bottom:14px}
+.of-tl-dot{position:absolute;left:-18px;top:4px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg2)}
+.of-tl-dot.sent{background:var(--primary)}
+.of-tl-dot.opened{background:var(--green)}
+.of-tl-dot.campaign{background:var(--amber)}
+.of-tl-item .of-tl-time{font-size:10px;color:var(--text3);margin-bottom:1px}
+.of-tl-item .of-tl-text{font-size:12px;color:var(--text2)}
+.of-tl-item .of-tl-text strong{color:var(--text);font-weight:600}
+.of-stats-row{display:flex;gap:12px;margin-bottom:14px}
+.of-stat-chip{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px;text-align:center;flex:1}
+.of-stat-chip .of-stat-val{font-size:18px;font-weight:700}
+.of-stat-chip .of-stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.of-tab-row{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px}
+.of-tab{padding:6px 12px;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.of-tab:hover{color:var(--text2)}
+.of-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+/* ===== LOGIN OVERLAY ===== */
+.login-overlay{position:fixed;inset:0;background:var(--bg);z-index:5000;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.login-overlay.hidden{display:none}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 40px;text-align:center;max-width:420px;width:90%}
+.login-card h1{font-size:28px;font-weight:700;background:linear-gradient(135deg,var(--emerald),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.login-card .subtitle{font-size:14px;color:var(--text3);margin-bottom:32px}
+.login-btn{display:inline-flex;align-items:center;gap:10px;padding:12px 24px;border-radius:var(--radius);font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;transition:var(--transition);width:100%;justify-content:center}
+.login-btn:hover{background:var(--bg4);border-color:var(--primary)}
+.login-btn svg{width:20px;height:20px}
+.login-error{color:var(--red);font-size:13px;margin-top:16px;display:none}
+.login-loading{color:var(--text3);font-size:13px;margin-top:16px;display:none}
+.login-divider{margin:24px 0;border-top:1px solid var(--border);position:relative}
+.login-divider span{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--bg2);padding:0 12px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+
+/* Loading overlay */
+.loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.9);z-index:4000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.loading-overlay.hidden{display:none}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--bg4);border-top-color:var(--emerald);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* User profile in topbar */
+.user-profile{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--radius);background:var(--bg3);border:1px solid var(--border);cursor:pointer;transition:var(--transition);font-size:12px;color:var(--text2);position:relative}
+.user-profile:hover{background:var(--bg4)}
+.user-avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--emerald),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.user-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);min-width:200px;display:none;z-index:100}
+.user-dropdown.show{display:block}
+.user-dropdown-item{padding:10px 14px;font-size:13px;color:var(--text2);cursor:pointer;transition:var(--transition);display:flex;align-items:center;gap:8px}
+.user-dropdown-item:hover{background:var(--bg3);color:var(--text)}
+.user-dropdown-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3)}
+
+/* Sidebar sync status */
+.sidebar-sync{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.sidebar-sync-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
+.sidebar-sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+
+/* Save indicator */
+.save-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);margin-left:8px;opacity:0;transition:opacity .3s ease}
+.save-indicator.visible{opacity:1}
+.save-indicator .mini-spin{width:12px;height:12px;border:2px solid var(--bg4);border-top-color:var(--emerald);border-radius:50%;animation:spin .6s linear infinite}
+
+/* Settings page additions */
+.settings-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;max-width:600px;margin-bottom:16px}
+.settings-card h3{font-size:15px;font-weight:600;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h1>Stillport CRM</h1>
+    <p class="subtitle">Fundraise Tracker</p>
+    <button class="login-btn" id="loginBtn" onclick="handleLogin()">
+      <svg viewBox="0 0 21 21"><path d="M0 0h10v10H0z" fill="#F25022"/><path d="M11 0h10v10H11z" fill="#7FBA00"/><path d="M0 11h10v10H0z" fill="#00A4EF"/><path d="M11 11h10v10H11z" fill="#FFB900"/></svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-loading" id="loginLoading">Signing in...</div>
+    <div class="login-divider"><span>or</span></div>
+    <button class="login-btn" style="font-size:12px;color:var(--text3);" onclick="skipLogin()">
+      Continue offline (local data only)
+    </button>
+    <p style="font-size:11px;color:var(--text3);margin-top:24px;">Sign in with your @stillport.co account to access shared team data stored on OneDrive.</p>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay hidden" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div style="font-size:14px;color:var(--text2);" id="loadingText">Loading your data...</div>
+</div>
+
+<!-- DATA MIGRATION MODAL -->
+<div class="modal-overlay" id="migrationModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><h3>Migrate Local Data?</h3></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">We found existing data in your browser from a previous session. Would you like to upload it to the shared OneDrive folder so your team can access it?</p>
+      <div id="migrationStats" style="font-size:13px;color:var(--text3);margin-bottom:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="skipMigration()">Skip</button>
+      <button class="btn btn-primary" onclick="runMigration()">Migrate to OneDrive</button>
+    </div>
+  </div>
+</div>
+
+<div class="app" style="display:none;" id="mainApp">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Stillport CRM</h1>
+      <span>Fundraise Tracker</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Fundraise</div>
+        <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-page="pipeline" onclick="showPage('pipeline')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3z"/><path d="M6 7v4h12V7"/><path d="M9 11v4h6v-4"/><path d="M11 15v4h2v-4"/></svg>
+          Pipeline
+          <span class="nav-badge" id="pipelineCount">0</span>
+        </button>
+        <button class="nav-item" data-page="investors" onclick="showPage('investors')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Investors
+        </button>
+        <button class="nav-item" data-page="activity" onclick="showPage('activity')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Activity Log
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Round</div>
+        <button class="nav-item" data-page="round" onclick="showPage('round')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Round Settings
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Integration</div>
+        <button class="nav-item" data-page="sync" onclick="showPage('sync')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          OutreachFlow Sync
+        </button>
+        <button class="nav-item" data-page="cloudsettings" onclick="showPage('cloudsettings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          Cloud Settings
+        </button>
+      </div>
+    </nav>
+    <div class="sidebar-sync" id="sidebarSync">
+      <div class="sidebar-sync-row">
+        <span class="sidebar-sync-dot" id="cloudSyncDot" style="background:var(--text3)"></span>
+        <span id="cloudSyncLabel">Not connected</span>
+      </div>
+      <div class="sidebar-sync-row">
+        <span class="sidebar-sync-dot" style="background:var(--emerald)"></span>
+        <span>OutreachFlow linked</span>
+      </div>
+      <div class="sidebar-sync-row" id="lastSyncRow" style="display:none;">
+        <span id="lastSyncLabel" style="color:var(--text3);font-size:10px;"></span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbarTitle">Dashboard</span>
+      <span class="save-indicator" id="saveIndicator"><span class="mini-spin"></span> Saving...</span>
+      <div class="topbar-actions">
+        <div class="search-box" style="width:220px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" placeholder="Search investors..." id="globalSearch" oninput="globalSearchHandler(this.value)">
+        </div>
+        <button class="btn btn-primary" onclick="openInvestorModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+          Add Investor
+        </button>
+        <div class="user-profile" id="userProfile" onclick="toggleUserDropdown()" style="display:none;">
+          <span class="user-avatar" id="userAvatar"></span>
+          <span id="userName"></span>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-dropdown-header" id="userEmail"></div>
+            <div class="user-dropdown-item" onclick="event.stopPropagation();handleLogout()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign out
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header"><h2>Fundraise Dashboard</h2>
+          <div id="roundBadge" style="font-size:13px;"></div>
+        </div>
+        <div class="stats-grid" id="dashStats"></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Pipeline by Stage</span></div>
+            <canvas id="pipelineChart" height="240"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Commitment Progress</span></div>
+            <div id="commitProgress"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Upcoming Actions</span></div>
+            <div id="upcomingActions"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Recent Activity</span></div>
+            <div id="recentActivity"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PIPELINE KANBAN -->
+      <div class="page" id="page-pipeline">
+        <div class="page-header">
+          <h2>Pipeline</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="showPage('pipeline')" id="kanbanViewBtn" style="background:var(--primary-bg);color:var(--primary);">Kanban</button>
+            <button class="btn btn-secondary btn-sm" onclick="showTableView()" id="tableViewBtn">Table</button>
+            <button class="btn btn-primary btn-sm" onclick="openInvestorModal()">+ Add Investor</button>
+          </div>
+        </div>
+        <div id="kanbanView" class="kanban"></div>
+        <div id="tableView" style="display:none;"></div>
+      </div>
+
+      <!-- INVESTORS LIST -->
+      <div class="page" id="page-investors">
+        <div class="page-header">
+          <h2>All Investors</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+            <button class="btn btn-primary" onclick="openInvestorModal()">+ Add Investor</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <div class="search-box" style="flex:1;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" placeholder="Search by firm, partner, or sector..." oninput="searchInvestors(this.value)">
+          </div>
+          <select class="form-select" style="width:180px;" onchange="filterByStage(this.value)">
+            <option value="">All Stages</option>
+          </select>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th class="sortable" onclick="sortInvestors('firm',this)">Firm</th><th class="sortable" onclick="sortInvestors('partner',this)">Name</th><th class="sortable" onclick="sortInvestors('role',this)">Role</th><th class="sortable" onclick="sortInvestors('investorType',this)">Type</th><th class="sortable" onclick="sortInvestors('stage',this)">Stage</th><th class="sortable" onclick="sortInvestors('checkSize',this)">Check Size</th><th class="sortable" onclick="sortInvestors('sector',this)">Sector Focus</th><th class="sortable" onclick="sortInvestors('nextAction',this)">Next Action</th><th class="sortable" onclick="sortInvestors('updatedAt',this)">Last Contact</th><th></th></tr></thead>
+          <tbody id="investorTableBody"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ACTIVITY LOG -->
+      <div class="page" id="page-activity">
+        <div class="page-header"><h2>Activity Log</h2>
+          <button class="btn btn-secondary btn-sm" onclick="openLogModal()">+ Log Activity</button>
+        </div>
+        <div id="fullActivityLog"></div>
+      </div>
+
+      <!-- ROUND SETTINGS -->
+      <div class="page" id="page-round">
+        <div class="page-header"><h2>Round Settings</h2></div>
+        <div class="card" style="max-width:600px;">
+          <div class="form-group"><label class="form-label">Round Name</label><input class="form-input" id="roundName" placeholder="e.g., Seed Round, Series A" oninput="saveRound()"></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Target Raise</label><input class="form-input" type="number" id="roundTarget" placeholder="5000000" oninput="saveRound()"></div>
+            <div class="form-group"><label class="form-label">Minimum Check Size</label><input class="form-input" type="number" id="roundMinCheck" placeholder="100000" oninput="saveRound()"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Pre-Money Valuation</label><input class="form-input" type="number" id="roundValuation" placeholder="20000000" oninput="saveRound()"></div>
+            <div class="form-group"><label class="form-label">Instrument</label>
+              <select class="form-select" id="roundInstrument" onchange="saveRound()">
+                <option value="Priced Equity">Priced Equity</option><option value="SAFE">SAFE</option><option value="Convertible Note">Convertible Note</option><option value="KISS">KISS</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Target Close Date</label><input class="form-input" type="date" id="roundCloseDate" oninput="saveRound()"></div>
+          <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="roundNotes" placeholder="Key terms, conditions, etc." oninput="saveRound()"></textarea></div>
+        </div>
+      </div>
+
+      <!-- OUTREACHFLOW SYNC -->
+      <div class="page" id="page-sync">
+        <div class="page-header"><h2>OutreachFlow Integration</h2></div>
+        <div class="card" style="max-width:640px;">
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Stillport CRM shares data with OutreachFlow through your browser's localStorage. Investors you add here are automatically available as contacts in OutreachFlow for email campaigns.</p>
+          <div class="form-group"><label class="form-label">Sync List Name</label><input class="form-input" id="syncListName" value="Fundraise Investors" oninput="saveSyncSettings()"><span class="form-hint">Investors will appear under this list name in OutreachFlow's contact list.</span></div>
+          <div class="form-group" style="margin-top:16px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="autoSync" checked onchange="saveSyncSettings()" style="accent-color:var(--primary);width:16px;height:16px;"> Auto-sync investors to OutreachFlow on save</label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button class="btn btn-primary" onclick="syncAllToOutreach()">Sync All Investors Now</button>
+            <button class="btn btn-secondary" onclick="pullFromOutreach()">Pull Campaign Stats</button>
+          </div>
+          <div id="syncResult" style="margin-top:12px;font-size:13px;"></div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="card-title" style="margin-bottom:8px;">Sync Status</div>
+            <div id="syncDetails" style="font-size:13px;color:var(--text2);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLOUD SETTINGS (new) -->
+      <div class="page" id="page-cloudsettings">
+        <div class="page-header"><h2>Cloud Settings</h2></div>
+        <div class="settings-card">
+          <h3>Microsoft 365 Connection</h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Configure the Azure AD app registration to enable team login and shared OneDrive storage.</p>
+          <div class="form-group"><label class="form-label">Tenant ID</label><input class="form-input" id="cfgTenantId" placeholder="e.g., 12345678-abcd-..." oninput="saveCloudConfig()"></div>
+          <div class="form-group"><label class="form-label">Client ID</label><input class="form-input" id="cfgClientId" placeholder="e.g., abcdef01-2345-..." oninput="saveCloudConfig()"></div>
+          <div class="form-group"><label class="form-label">OneDrive Folder Path</label><input class="form-input" id="cfgFolderPath" placeholder="e.g., Stillport, Inc/09_INVESTOR RELATIONS/..." oninput="saveCloudConfig()"><span class="form-hint">Path to the shared folder on OneDrive where CRM data files will be stored.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INVESTOR MODAL -->
+<div class="modal-overlay" id="investorModal">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header"><h3 id="investorModalTitle">Add Investor</h3><button class="modal-close" onclick="closeModal('investorModal')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editInvestorId">
+      <div class="tabs" id="invTabs">
+        <button class="tab active" onclick="showInvTab('details',this)">Details</button>
+        <button class="tab" onclick="showInvTab('thesis',this)">Thesis & Fit</button>
+        <button class="tab" onclick="showInvTab('intros',this)">Warm Intros</button>
+      </div>
+      <div id="inv-details">
+        <div class="form-row-3">
+          <div class="form-group"><label class="form-label">Firm Name *</label><input class="form-input" id="invFirm" placeholder="e.g., Sequoia Capital"></div>
+          <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="invPartner" placeholder="e.g., Alfred Lin"></div>
+          <div class="form-group"><label class="form-label">Role</label><input class="form-input" id="invRole" placeholder="e.g., Managing Partner"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="invEmail" type="email" placeholder="alfred@sequoia.com"></div>
+        <div class="form-row-3">
+          <div class="form-group"><label class="form-label">Fund Size</label><input class="form-input" id="invFundSize" placeholder="e.g., $1B"></div>
+          <div class="form-group"><label class="form-label">Check Size Range</label><input class="form-input" id="invCheckSize" placeholder="e.g., $500K-$2M"></div>
+          <div class="form-group"><label class="form-label">Stage Focus</label>
+            <select class="form-select" id="invStageFocus"><option value="Pre-Seed">Pre-Seed</option><option value="Seed" selected>Seed</option><option value="Series A">Series A</option><option value="Series B+">Series B+</option><option value="Multi-Stage">Multi-Stage</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Pipeline Stage</label>
+            <select class="form-select" id="invPipelineStage"></select>
+          </div>
+          <div class="form-group"><label class="form-label">Priority</label>
+            <select class="form-select" id="invPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>
+          </div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group"><label class="form-label">Type</label>
+            <select class="form-select" id="invType"><option value="">—</option><option value="VC">VC</option><option value="Growth">Growth</option><option value="PE">PE</option><option value="RE">RE</option><option value="Family Office">Family Office</option><option value="HNW">HNW</option></select>
+          </div>
+          <div class="form-group"><label class="form-label">Sector Focus</label><input class="form-input" id="invSector" placeholder="e.g., Fintech, SaaS, Climate"></div>
+          <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="invLocation" placeholder="e.g., San Francisco, CA"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">LinkedIn URL</label><input class="form-input" id="invLinkedin" placeholder="https://linkedin.com/in/..."></div>
+          <div class="form-group"><label class="form-label">Website</label><input class="form-input" id="invWebsite" placeholder="https://sequoia.com"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Next Action</label><input class="form-input" id="invNextAction" placeholder="e.g., Send deck, Schedule call, Follow up"></div>
+        <div class="form-group"><label class="form-label">Next Action Date</label><input class="form-input" type="date" id="invNextDate"></div>
+        <div class="form-group"><label class="form-label">Committed Amount</label><input class="form-input" type="number" id="invCommitted" placeholder="0"><span class="form-hint">Enter amount if investor has made a verbal or written commitment.</span></div>
+      </div>
+      <div id="inv-thesis" style="display:none;">
+        <div class="form-group"><label class="form-label">Investment Thesis</label><textarea class="form-textarea" id="invThesis" placeholder="What does this firm/partner look for? Key thesis areas, recent investments..."></textarea></div>
+        <div class="form-group"><label class="form-label">Why They're a Fit for Stillport</label><textarea class="form-textarea" id="invFit" placeholder="Alignment with our market, team background overlap, portfolio synergies..."></textarea></div>
+        <div class="form-group"><label class="form-label">Notable Portfolio Companies</label><input class="form-input" id="invPortfolio" placeholder="e.g., Stripe, Airbnb, DoorDash"></div>
+        <div class="form-group"><label class="form-label">Potential Concerns</label><textarea class="form-textarea" id="invConcerns" placeholder="Any known reservations, competitive investments, stage mismatch..."></textarea></div>
+      </div>
+      <div id="inv-intros" style="display:none;">
+        <div class="form-group"><label class="form-label">Warm Intro Path</label><textarea class="form-textarea" id="invIntroPath" placeholder="Who can introduce you? Chain of connections..."></textarea></div>
+        <div class="form-group"><label class="form-label">Intro Status</label>
+          <select class="form-select" id="invIntroStatus"><option value="none">No intro yet</option><option value="identified">Intro path identified</option><option value="requested">Intro requested</option><option value="made">Intro made</option><option value="cold">Going cold (no intro)</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="invNotes" placeholder="General notes, conversation highlights, follow-up items..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('investorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvestor()">Save Investor</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVITY LOG MODAL -->
+<div class="modal-overlay" id="logModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header"><h3>Log Activity</h3><button class="modal-close" onclick="closeModal('logModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Investor</label>
+        <select class="form-select" id="logInvestor"></select>
+      </div>
+      <div class="form-group"><label class="form-label">Activity Type</label>
+        <select class="form-select" id="logType">
+          <option value="email">Email Sent</option><option value="email_received">Email Received</option><option value="call">Phone Call</option><option value="meeting">Meeting</option>
+          <option value="deck_sent">Deck Sent</option><option value="intro">Intro Made</option><option value="follow_up">Follow-up</option>
+          <option value="term_sheet">Term Sheet</option><option value="commitment">Commitment</option><option value="note">Note</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="logDesc" placeholder="What happened?"></textarea></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="datetime-local" id="logDate"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('logModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLog()">Log Activity</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVESTOR DETAIL MODAL -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-header"><h3 id="detailTitle">Investor Detail</h3><button class="modal-close" onclick="closeModal('detailModal')">&times;</button></div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('detailModal')">Close</button>
+      <button class="btn btn-secondary" id="detailEditBtn">Edit</button>
+      <button class="btn btn-primary" id="detailLogBtn">+ Log Activity</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== CLOUD CONFIG (stored in localStorage — per-browser, not shared) =====
+const CLOUD_CFG_KEY = 'sp_cloud_config';
+const CLOUD_DEFAULTS = {
+  tenantId: '13dc13e3-f6f6-4c45-948d-baae80478dd4',
+  clientId: '17511f86-ad7d-40a2-9978-01a08df6934b',
+  folderPath: 'Stillport, Inc/09_INVESTOR RELATIONS/03_Investor Pipeline/03_Pipeline Tracker/CRM and Outreach Apps/CRM Data',
+};
+let cloudConfig = { ...CLOUD_DEFAULTS, ...JSON.parse(localStorage.getItem(CLOUD_CFG_KEY) || '{}') };
+if (!localStorage.getItem(CLOUD_CFG_KEY)) localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudConfig));
+let msalInstance = null;
+let currentUser = null;
+let isCloudMode = false;
+let lastSyncTime = null;
+let autoRefreshInterval = null;
+
+// ===== MSAL AUTH =====
+function initMSAL() {
+  if (!cloudConfig.clientId || !cloudConfig.tenantId) return false;
+  try {
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: cloudConfig.clientId,
+        authority: `https://login.microsoftonline.com/${cloudConfig.tenantId}`,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false },
+    });
+    return true;
+  } catch (e) { console.error('MSAL init failed:', e); return false; }
+}
+
+async function handleLogin() {
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'block';
+  document.getElementById('loginBtn').disabled = true;
+
+  if (!initMSAL()) {
+    document.getElementById('loginError').textContent = 'Cloud not configured. Go to Cloud Settings first (use offline mode to set up).';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+    return;
+  }
+
+  try {
+    const loginResp = await msalInstance.loginPopup({
+      scopes: ['User.Read', 'Files.ReadWrite'],
+    });
+    currentUser = loginResp.account;
+    isCloudMode = true;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    await loadAppWithCloud();
+  } catch (err) {
+    console.error('Login failed:', err);
+    document.getElementById('loginError').textContent = err.message || 'Login failed. Please try again.';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+  }
+}
+
+function skipLogin() {
+  isCloudMode = false;
+  currentUser = null;
+  document.getElementById('loginOverlay').classList.add('hidden');
+  loadAppOffline();
+}
+
+async function handleLogout() {
+  if (msalInstance && currentUser) {
+    try { await msalInstance.logoutPopup({ account: currentUser }); } catch (e) { /* ignore */ }
+  }
+  currentUser = null;
+  isCloudMode = false;
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  sessionStorage.clear();
+  location.reload();
+}
+
+async function getAccessToken() {
+  if (!msalInstance || !currentUser) return null;
+  try {
+    const resp = await msalInstance.acquireTokenSilent({
+      scopes: ['Files.ReadWrite'],
+      account: currentUser,
+    });
+    return resp.accessToken;
+  } catch (e) {
+    try {
+      const resp = await msalInstance.acquireTokenPopup({ scopes: ['Files.ReadWrite'] });
+      return resp.accessToken;
+    } catch (e2) { console.error('Token error:', e2); return null; }
+  }
+}
+
+// ===== ONEDRIVE STORAGE =====
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const DATA_FILES = ['sp_investors', 'sp_activities', 'sp_round', 'sp_sync'];
+
+function getFilePath(key) {
+  const folder = cloudConfig.folderPath || '';
+  return folder ? `${folder}/${key}.json` : `${key}.json`;
+}
+
+async function odRead(key) {
+  const token = await getAccessToken();
+  if (!token) return null;
+  try {
+    const path = encodeURIComponent(getFilePath(key)).replace(/%2F/g, '/');
+    const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (e) { console.warn(`OneDrive read ${key}:`, e); return null; }
+}
+
+async function odWrite(key, data) {
+  const token = await getAccessToken();
+  if (!token) throw new Error('No auth token');
+  const path = encodeURIComponent(getFilePath(key)).replace(/%2F/g, '/');
+  const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+  return await resp.json();
+}
+
+// ===== DATA =====
+const STAGES = [
+  {id:'researching',label:'Researching',color:'var(--text3)',badge:'badge-purple'},
+  {id:'contacted',label:'Contacted',color:'var(--blue)',badge:'badge-blue'},
+  {id:'meeting_scheduled',label:'Meeting Scheduled',color:'var(--cyan)',badge:'badge-cyan'},
+  {id:'first_meeting',label:'First Meeting',color:'var(--amber)',badge:'badge-amber'},
+  {id:'followup_dd',label:'Follow-up / DD',color:'var(--pink)',badge:'badge-pink'},
+  {id:'term_sheet',label:'Term Sheet',color:'var(--emerald)',badge:'badge-emerald'},
+  {id:'closed',label:'Closed',color:'var(--green)',badge:'badge-green'},
+  {id:'passed',label:'Passed',color:'var(--red)',badge:'badge-red'},
+];
+
+const DB = {
+  investors: [],
+  activities: [],
+  round: {},
+  syncSettings: { listName: 'Fundraise Investors', autoSync: true },
+};
+
+// Debounce timer for persist
+let persistTimers = {};
+
+async function persist(k) {
+  // Always cache to localStorage as backup
+  localStorage.setItem('sp_' + k, JSON.stringify(DB[k]));
+
+  if (isCloudMode) {
+    // Debounce cloud writes (300ms)
+    clearTimeout(persistTimers[k]);
+    persistTimers[k] = setTimeout(async () => {
+      showSaveIndicator(true);
+      try {
+        await odWrite('sp_' + k, DB[k]);
+        lastSyncTime = new Date();
+        updateSyncStatus('synced');
+      } catch (e) {
+        console.error(`Cloud save failed for ${k}:`, e);
+        toast('Cloud save failed — changes saved locally', 'error');
+        updateSyncStatus('error');
+      }
+      showSaveIndicator(false);
+    }, 300);
+  }
+}
+
+function showSaveIndicator(show) {
+  const el = document.getElementById('saveIndicator');
+  if (show) el.classList.add('visible');
+  else setTimeout(() => el.classList.remove('visible'), 500);
+}
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function fmt$(n){if(!n)return'$0';if(n>=1e6)return'$'+((n/1e6).toFixed(1))+'M';if(n>=1e3)return'$'+((n/1e3).toFixed(0))+'K';return'$'+n}
+function fmtDate(d){if(!d)return'\u2014';return new Date(d).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'})}
+function toast(msg,type='success'){const t=document.createElement('div');t.className='toast toast-'+type;t.innerHTML=msg;document.getElementById('toastContainer').appendChild(t);setTimeout(()=>t.remove(),4000)}
+function openModal(id){document.getElementById(id).classList.add('active')}
+function closeModal(id){document.getElementById(id).classList.remove('active')}
+function stageInfo(id){return STAGES.find(s=>s.id===id)||STAGES[0]}
+const TYPE_BADGES={VC:'badge-purple',Growth:'badge-blue',PE:'badge-cyan',RE:'badge-amber','Family Office':'badge-emerald',HNW:'badge-pink'};
+function typeBadge(t){return t?`<span class="badge ${TYPE_BADGES[t]||'badge-purple'}">${t}</span>`:'\u2014'}
+
+// ===== APP INITIALIZATION =====
+async function loadAppWithCloud() {
+  showLoading(true, 'Loading shared data from OneDrive...');
+  document.getElementById('mainApp').style.display = '';
+
+  // Load all data files from OneDrive in parallel
+  try {
+    const [investors, activities, round, sync] = await Promise.all(
+      DATA_FILES.map(k => odRead(k))
+    );
+    DB.investors = investors || [];
+    DB.activities = activities || [];
+    DB.round = round || {};
+    DB.syncSettings = sync || { listName: 'Fundraise Investors', autoSync: true };
+
+    // Cache locally
+    DATA_FILES.forEach((k, i) => {
+      const data = [investors, activities, round, sync][i];
+      if (data) localStorage.setItem(k, JSON.stringify(data));
+    });
+
+    lastSyncTime = new Date();
+    updateSyncStatus('synced');
+  } catch (e) {
+    console.error('Cloud load failed, using local cache:', e);
+    loadFromLocalStorage();
+    toast('Could not reach OneDrive — using cached data', 'error');
+    updateSyncStatus('error');
+  }
+
+  // Check for data migration
+  checkMigration();
+
+  setupUserUI();
+  showLoading(false);
+  updatePipelineCount();
+  refreshDashboard();
+  loadCloudConfig();
+
+  // Start auto-refresh every 30 seconds
+  autoRefreshInterval = setInterval(autoRefreshFromCloud, 30000);
+}
+
+function loadAppOffline() {
+  document.getElementById('mainApp').style.display = '';
+  loadFromLocalStorage();
+  updateSyncStatus('offline');
+  updatePipelineCount();
+  refreshDashboard();
+  loadCloudConfig();
+}
+
+function loadFromLocalStorage() {
+  DB.investors = JSON.parse(localStorage.getItem('sp_investors') || '[]');
+  DB.activities = JSON.parse(localStorage.getItem('sp_activities') || '[]');
+  DB.round = JSON.parse(localStorage.getItem('sp_round') || '{}');
+  DB.syncSettings = JSON.parse(localStorage.getItem('sp_sync') || '{"listName":"Fundraise Investors","autoSync":true}');
+}
+
+function showLoading(show, text) {
+  const el = document.getElementById('loadingOverlay');
+  if (text) document.getElementById('loadingText').textContent = text;
+  if (show) el.classList.remove('hidden');
+  else el.classList.add('hidden');
+}
+
+// ===== DATA MIGRATION =====
+function checkMigration() {
+  if (!isCloudMode) return;
+  const localInvestors = JSON.parse(localStorage.getItem('sp_investors') || '[]');
+  if (localInvestors.length > 0 && DB.investors.length === 0) {
+    // Local data exists but cloud is empty — offer migration
+    document.getElementById('migrationStats').textContent =
+      `Found ${localInvestors.length} investors in local storage.`;
+    openModal('migrationModal');
+  }
+}
+
+async function runMigration() {
+  showLoading(true, 'Migrating data to OneDrive...');
+  closeModal('migrationModal');
+
+  DB.investors = JSON.parse(localStorage.getItem('sp_investors') || '[]');
+  DB.activities = JSON.parse(localStorage.getItem('sp_activities') || '[]');
+  DB.round = JSON.parse(localStorage.getItem('sp_round') || '{}');
+  DB.syncSettings = JSON.parse(localStorage.getItem('sp_sync') || '{"listName":"Fundraise Investors","autoSync":true}');
+
+  try {
+    await Promise.all([
+      odWrite('sp_investors', DB.investors),
+      odWrite('sp_activities', DB.activities),
+      odWrite('sp_round', DB.round),
+      odWrite('sp_sync', DB.syncSettings),
+    ]);
+    toast('Data migrated to OneDrive successfully!');
+  } catch (e) {
+    console.error('Migration failed:', e);
+    toast('Migration failed: ' + e.message, 'error');
+  }
+
+  showLoading(false);
+  updatePipelineCount();
+  refreshDashboard();
+}
+
+function skipMigration() {
+  closeModal('migrationModal');
+}
+
+// ===== AUTO REFRESH =====
+async function autoRefreshFromCloud() {
+  if (!isCloudMode) return;
+  try {
+    const [investors, activities, round, sync] = await Promise.all(
+      DATA_FILES.map(k => odRead(k))
+    );
+    // Simple change detection
+    const remoteHash = JSON.stringify([investors, activities, round, sync]);
+    const localHash = JSON.stringify([DB.investors, DB.activities, DB.round, DB.syncSettings]);
+    if (remoteHash !== localHash) {
+      DB.investors = investors || DB.investors;
+      DB.activities = activities || DB.activities;
+      DB.round = round || DB.round;
+      DB.syncSettings = sync || DB.syncSettings;
+      updatePipelineCount();
+      renderCurrentPage();
+    }
+    lastSyncTime = new Date();
+    updateSyncStatus('synced');
+  } catch (e) {
+    console.warn('Auto-refresh failed:', e);
+    updateSyncStatus('error');
+  }
+}
+
+// ===== USER UI =====
+function setupUserUI() {
+  if (!currentUser) return;
+  const name = currentUser.name || currentUser.username || '';
+  const email = currentUser.username || '';
+  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?';
+
+  document.getElementById('userAvatar').textContent = initials;
+  document.getElementById('userName').textContent = name.split(' ')[0];
+  document.getElementById('userEmail').textContent = email;
+  document.getElementById('userProfile').style.display = '';
+}
+
+function toggleUserDropdown() {
+  document.getElementById('userDropdown').classList.toggle('show');
+}
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.user-profile')) {
+    document.getElementById('userDropdown').classList.remove('show');
+  }
+});
+
+function updateSyncStatus(status) {
+  const dot = document.getElementById('cloudSyncDot');
+  const label = document.getElementById('cloudSyncLabel');
+  const row = document.getElementById('lastSyncRow');
+
+  if (status === 'synced') {
+    dot.style.background = 'var(--emerald)';
+    label.textContent = 'OneDrive synced';
+  } else if (status === 'saving') {
+    dot.style.background = 'var(--amber)';
+    label.textContent = 'Saving...';
+  } else if (status === 'error') {
+    dot.style.background = 'var(--red)';
+    label.textContent = 'Sync error';
+  } else {
+    dot.style.background = 'var(--text3)';
+    label.textContent = 'Offline (local only)';
+  }
+
+  if (lastSyncTime) {
+    row.style.display = '';
+    const ago = Math.round((Date.now() - lastSyncTime.getTime()) / 1000);
+    document.getElementById('lastSyncLabel').textContent =
+      ago < 60 ? 'Synced just now' : `Synced ${Math.round(ago/60)}m ago`;
+  }
+}
+
+// ===== CLOUD CONFIG =====
+function saveCloudConfig() {
+  cloudConfig = {
+    tenantId: document.getElementById('cfgTenantId').value.trim(),
+    clientId: document.getElementById('cfgClientId').value.trim(),
+    folderPath: document.getElementById('cfgFolderPath').value.trim(),
+  };
+  localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudConfig));
+  toast('Cloud settings saved');
+}
+
+function loadCloudConfig() {
+  document.getElementById('cfgTenantId').value = cloudConfig.tenantId || '';
+  document.getElementById('cfgClientId').value = cloudConfig.clientId || '';
+  document.getElementById('cfgFolderPath').value = cloudConfig.folderPath || '';
+}
+
+// ===== NAVIGATION =====
+function showPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const nav=document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(nav)nav.classList.add('active');
+  const titles={dashboard:'Fundraise Dashboard',pipeline:'Pipeline',investors:'All Investors',activity:'Activity Log',round:'Round Settings',sync:'OutreachFlow Integration',cloudsettings:'Cloud Settings'};
+  document.getElementById('topbarTitle').textContent=titles[page]||page;
+  if(page==='dashboard')refreshDashboard();
+  if(page==='pipeline')renderKanban();
+  if(page==='investors')renderInvestorTable();
+  if(page==='activity')renderFullActivity();
+  if(page==='round')loadRound();
+  if(page==='sync')refreshSyncPage();
+  if(page==='cloudsettings')loadCloudConfig();
+}
+
+// ===== INVESTORS =====
+function openInvestorModal(inv){
+  document.getElementById('editInvestorId').value=inv?inv.id:'';
+  document.getElementById('investorModalTitle').textContent=inv?'Edit Investor':'Add Investor';
+  const stageSelect=document.getElementById('invPipelineStage');
+  stageSelect.innerHTML=STAGES.map(s=>`<option value="${s.id}" ${inv&&inv.stage===s.id?'selected':''}>${s.label}</option>`).join('');
+  document.getElementById('invFirm').value=inv?inv.firm:'';
+  document.getElementById('invPartner').value=inv?inv.partner:'';
+  document.getElementById('invRole').value=inv?inv.role||'':'';
+  document.getElementById('invEmail').value=inv?inv.email:'';
+  document.getElementById('invFundSize').value=inv?inv.fundSize:'';
+  document.getElementById('invCheckSize').value=inv?inv.checkSize:'';
+  document.getElementById('invStageFocus').value=inv?inv.stageFocus:'Seed';
+  document.getElementById('invPriority').value=inv?inv.priority:'medium';
+  document.getElementById('invType').value=inv?inv.investorType||'':'';
+  document.getElementById('invSector').value=inv?inv.sector:'';
+  document.getElementById('invLocation').value=inv?inv.location:'';
+  document.getElementById('invLinkedin').value=inv?inv.linkedin:'';
+  document.getElementById('invWebsite').value=inv?inv.website:'';
+  document.getElementById('invNextAction').value=inv?inv.nextAction:'';
+  document.getElementById('invNextDate').value=inv?inv.nextDate:'';
+  document.getElementById('invCommitted').value=inv?inv.committed||'':'';
+  document.getElementById('invThesis').value=inv?inv.thesis:'';
+  document.getElementById('invFit').value=inv?inv.fit:'';
+  document.getElementById('invPortfolio').value=inv?inv.portfolio:'';
+  document.getElementById('invConcerns').value=inv?inv.concerns:'';
+  document.getElementById('invIntroPath').value=inv?inv.introPath:'';
+  document.getElementById('invIntroStatus').value=inv?inv.introStatus:'none';
+  document.getElementById('invNotes').value=inv?inv.notes:'';
+  showInvTab('details',document.querySelector('#invTabs .tab'));
+  openModal('investorModal');
+}
+function showInvTab(tab,el){
+  ['details','thesis','intros'].forEach(t=>{document.getElementById('inv-'+t).style.display=t===tab?'':'none'});
+  el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+function saveInvestor(){
+  const firm=document.getElementById('invFirm').value.trim();
+  const partner=document.getElementById('invPartner').value.trim();
+  if(!firm||!partner){toast('Firm and Name are required','error');return}
+  const data={
+    firm,partner,
+    role:document.getElementById('invRole').value.trim(),
+    email:document.getElementById('invEmail').value.trim(),
+    fundSize:document.getElementById('invFundSize').value.trim(),
+    checkSize:document.getElementById('invCheckSize').value.trim(),
+    stageFocus:document.getElementById('invStageFocus').value,
+    stage:document.getElementById('invPipelineStage').value,
+    priority:document.getElementById('invPriority').value,
+    investorType:document.getElementById('invType').value,
+    sector:document.getElementById('invSector').value.trim(),
+    location:document.getElementById('invLocation').value.trim(),
+    linkedin:document.getElementById('invLinkedin').value.trim(),
+    website:document.getElementById('invWebsite').value.trim(),
+    nextAction:document.getElementById('invNextAction').value.trim(),
+    nextDate:document.getElementById('invNextDate').value,
+    committed:parseFloat(document.getElementById('invCommitted').value)||0,
+    thesis:document.getElementById('invThesis').value.trim(),
+    fit:document.getElementById('invFit').value.trim(),
+    portfolio:document.getElementById('invPortfolio').value.trim(),
+    concerns:document.getElementById('invConcerns').value.trim(),
+    introPath:document.getElementById('invIntroPath').value.trim(),
+    introStatus:document.getElementById('invIntroStatus').value,
+    notes:document.getElementById('invNotes').value.trim(),
+  };
+  const editId=document.getElementById('editInvestorId').value;
+  if(editId){
+    const idx=DB.investors.findIndex(i=>i.id===editId);
+    if(idx>=0){
+      const oldStage=DB.investors[idx].stage;
+      DB.investors[idx]={...DB.investors[idx],...data,updatedAt:new Date().toISOString()};
+      if(oldStage!==data.stage) logActivity(editId,'stage_change',`Moved from ${stageInfo(oldStage).label} to ${stageInfo(data.stage).label}`);
+    }
+  }else{
+    data.id=uid();data.createdAt=new Date().toISOString();data.updatedAt=data.createdAt;
+    DB.investors.push(data);
+    logActivity(data.id,'added',`Added ${firm} (${partner}) to pipeline`);
+  }
+  persist('investors');
+  closeModal('investorModal');
+  if(DB.syncSettings.autoSync) syncToOutreach(editId?DB.investors.find(i=>i.id===editId):data);
+  updatePipelineCount();
+  renderCurrentPage();
+  toast(editId?'Investor updated':'Investor added');
+}
+function deleteInvestor(id){
+  if(!confirm('Remove this investor from the pipeline?'))return;
+  const inv=DB.investors.find(i=>i.id===id);
+  DB.investors=DB.investors.filter(i=>i.id!==id);
+  persist('investors');
+  if(inv)logActivity(id,'removed',`Removed ${inv.firm} from pipeline`);
+  updatePipelineCount();
+  renderCurrentPage();
+  toast('Investor removed');
+}
+
+// ===== ACTIVITY LOG =====
+function logActivity(investorId,type,description,date){
+  DB.activities.push({id:uid(),investorId,type,description,date:date||new Date().toISOString(),user:currentUser?currentUser.username:''});
+  persist('activities');
+}
+function openLogModal(investorId){
+  const sel=document.getElementById('logInvestor');
+  sel.innerHTML=DB.investors.map(i=>`<option value="${i.id}" ${investorId===i.id?'selected':''}>${i.firm} (${i.partner})</option>`).join('');
+  document.getElementById('logDesc').value='';
+  document.getElementById('logDate').value=new Date().toISOString().slice(0,16);
+  openModal('logModal');
+}
+function saveLog(){
+  const investorId=document.getElementById('logInvestor').value;
+  const type=document.getElementById('logType').value;
+  const desc=document.getElementById('logDesc').value.trim();
+  const date=document.getElementById('logDate').value;
+  if(!desc){toast('Please enter a description','error');return}
+  logActivity(investorId,type,desc,date?new Date(date).toISOString():undefined);
+  closeModal('logModal');
+  renderCurrentPage();
+  toast('Activity logged');
+}
+const actTypeColors={email:'var(--blue)',email_received:'var(--cyan)',call:'var(--amber)',meeting:'var(--pink)',
+  deck_sent:'var(--primary)',intro:'var(--emerald)',follow_up:'var(--text3)',term_sheet:'var(--green)',
+  commitment:'var(--green)',note:'var(--text3)',stage_change:'var(--primary)',added:'var(--emerald)',removed:'var(--red)'};
+const actTypeLabels={email:'Email Sent',email_received:'Email Received',call:'Call',meeting:'Meeting',
+  deck_sent:'Deck Sent',intro:'Intro',follow_up:'Follow-up',term_sheet:'Term Sheet',
+  commitment:'Commitment',note:'Note',stage_change:'Stage Change',added:'Added',removed:'Removed'};
+
+function renderActivityItems(activities,limit){
+  if(!activities.length)return'<p style="font-size:13px;color:var(--text3);padding:8px;">No activity yet.</p>';
+  const sorted=[...activities].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const items=limit?sorted.slice(0,limit):sorted;
+  return items.map(a=>{
+    const inv=DB.investors.find(i=>i.id===a.investorId);
+    const byUser = a.user ? ` by ${a.user.split('@')[0]}` : '';
+    return`<div class="activity-item">
+      <div class="activity-dot" style="background:${actTypeColors[a.type]||'var(--text3)'}"></div>
+      <div class="activity-content">
+        <div class="activity-text"><strong>${inv?inv.firm:'Unknown'}</strong> \u2014 ${a.description}</div>
+        <div class="activity-time">${actTypeLabels[a.type]||a.type}${byUser} \u00B7 ${fmtDate(a.date)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===== KANBAN =====
+let draggedCard=null;
+function renderKanban(){
+  const kanban=document.getElementById('kanbanView');
+  kanban.innerHTML=STAGES.map(stage=>{
+    const investors=DB.investors.filter(i=>i.stage===stage.id);
+    const total=investors.reduce((s,i)=>s+(i.committed||0),0);
+    return`<div class="kanban-col" data-stage="${stage.id}" ondragover="event.preventDefault();this.style.background='var(--bg3)'" ondragleave="this.style.background=''" ondrop="dropCard(event,'${stage.id}');this.style.background=''">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title" style="color:${stage.color}">${stage.label}</span>
+        <span class="kanban-col-count">${investors.length}</span>
+      </div>
+      <div class="kanban-col-body">${investors.map(i=>`
+        <div class="kanban-card" draggable="true" ondragstart="dragStart(event,'${i.id}')" ondragend="dragEnd(event)" onclick="openDetail('${i.id}')">
+          <div class="kanban-card-title">${i.firm}</div>
+          <div class="kanban-card-sub">${i.partner}</div>
+          <div class="kanban-card-meta">
+            ${i.checkSize?`<span class="kanban-card-amount">${i.checkSize}</span>`:''}
+            ${i.priority==='high'?'<span class="badge badge-red">High</span>':''}
+            ${i.nextAction?`<span class="badge badge-blue" style="font-size:10px;">${i.nextAction.slice(0,20)}</span>`:''}
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('kanbanView').style.display='';
+  document.getElementById('tableView').style.display='none';
+  document.getElementById('kanbanViewBtn').style.background='var(--primary-bg)';document.getElementById('kanbanViewBtn').style.color='var(--primary)';
+  document.getElementById('tableViewBtn').style.background='';document.getElementById('tableViewBtn').style.color='';
+}
+function dragStart(e,id){draggedCard=id;e.target.classList.add('dragging')}
+function dragEnd(e){e.target.classList.remove('dragging');draggedCard=null}
+function dropCard(e,stage){
+  e.preventDefault();
+  if(!draggedCard)return;
+  const inv=DB.investors.find(i=>i.id===draggedCard);
+  if(inv&&inv.stage!==stage){
+    const oldStage=inv.stage;
+    inv.stage=stage;
+    inv.updatedAt=new Date().toISOString();
+    persist('investors');
+    logActivity(inv.id,'stage_change',`Moved from ${stageInfo(oldStage).label} to ${stageInfo(stage).label}`);
+    if(DB.syncSettings.autoSync)syncToOutreach(inv);
+    renderKanban();
+    toast(`${inv.firm} moved to ${stageInfo(stage).label}`);
+  }
+}
+function showTableView(){
+  document.getElementById('kanbanView').style.display='none';
+  const investors=[...DB.investors].sort((a,b)=>STAGES.findIndex(s=>s.id===a.stage)-STAGES.findIndex(s=>s.id===b.stage));
+  document.getElementById('tableView').innerHTML=`<table><thead><tr><th>Firm</th><th>Name</th><th>Role</th><th>Type</th><th>Stage</th><th>Check Size</th><th>Committed</th><th>Priority</th><th>Next Action</th></tr></thead><tbody>`+
+    investors.map(i=>`<tr onclick="openDetail('${i.id}')"><td style="color:var(--text);font-weight:500;">${i.firm}</td><td>${i.partner}</td><td>${i.role||'\u2014'}</td><td>${typeBadge(i.investorType)}</td><td><span class="badge ${stageInfo(i.stage).badge}">${stageInfo(i.stage).label}</span></td><td>${i.checkSize||'\u2014'}</td><td>${i.committed?fmt$(i.committed):'\u2014'}</td><td>${{high:'<span class="badge badge-red">High</span>',medium:'<span class="badge badge-amber">Med</span>',low:'<span class="badge badge-blue">Low</span>'}[i.priority]||''}</td><td style="font-size:12px;">${i.nextAction||'\u2014'}</td></tr>`).join('')+
+    '</tbody></table>';
+  document.getElementById('tableView').style.display='';
+  document.getElementById('tableViewBtn').style.background='var(--primary-bg)';document.getElementById('tableViewBtn').style.color='var(--primary)';
+  document.getElementById('kanbanViewBtn').style.background='';document.getElementById('kanbanViewBtn').style.color='';
+}
+
+// ===== INVESTOR TABLE =====
+let currentSort={key:null,asc:true};
+function sortInvestors(key,thEl){
+  if(currentSort.key===key){currentSort.asc=!currentSort.asc}else{currentSort.key=key;currentSort.asc=true}
+  document.querySelectorAll('#page-investors th.sortable').forEach(th=>{th.classList.remove('asc','desc')});
+  thEl.classList.add(currentSort.asc?'asc':'desc');
+  renderInvestorTable();
+}
+function renderInvestorTable(search='',stageFilter=''){
+  let investors=[...DB.investors];
+  if(search){const s=search.toLowerCase();investors=investors.filter(i=>(i.firm+' '+i.partner+' '+i.sector+' '+i.email).toLowerCase().includes(s))}
+  if(stageFilter)investors=investors.filter(i=>i.stage===stageFilter);
+  if(currentSort.key){const k=currentSort.key,dir=currentSort.asc?1:-1;investors.sort((a,b)=>{const av=(a[k]||'').toString().toLowerCase(),bv=(b[k]||'').toString().toLowerCase();return av<bv?-dir:av>bv?dir:0})}
+  const tbody=document.getElementById('investorTableBody');
+  if(!investors.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">No investors found.</td></tr>';return}
+  tbody.innerHTML=investors.map(i=>`<tr onclick="openDetail('${i.id}')">
+    <td style="color:var(--text);font-weight:500;">${i.firm}</td><td>${i.partner}</td>
+    <td>${i.role||'\u2014'}</td>
+    <td>${typeBadge(i.investorType)}</td>
+    <td><span class="badge ${stageInfo(i.stage).badge}">${stageInfo(i.stage).label}</span></td>
+    <td>${i.checkSize||'\u2014'}</td><td>${i.sector||'\u2014'}</td>
+    <td style="font-size:12px;">${i.nextAction||'\u2014'}</td>
+    <td style="font-size:12px;">${i.updatedAt?fmtDate(i.updatedAt):'\u2014'}</td>
+    <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="openInvestorModal(DB.investors.find(x=>x.id==='${i.id}'))">Edit</button></td>
+  </tr>`).join('');
+  const sel=document.querySelector('#page-investors select');
+  if(sel)sel.innerHTML='<option value="">All Stages</option>'+STAGES.map(s=>`<option value="${s.id}">${s.label} (${DB.investors.filter(i=>i.stage===s.id).length})</option>`).join('');
+}
+function searchInvestors(v){renderInvestorTable(v)}
+function filterByStage(v){renderInvestorTable('',v)}
+
+// ===== INVESTOR DETAIL =====
+function openDetail(id){
+  const inv=DB.investors.find(i=>i.id===id);
+  if(!inv)return;
+  document.getElementById('detailTitle').textContent=inv.firm+' \u2014 '+inv.partner;
+  const acts=DB.activities.filter(a=>a.investorId===id);
+  const introLabels={none:'No intro yet',identified:'Intro path identified',requested:'Intro requested',made:'Intro made',cold:'Going cold'};
+  document.getElementById('detailBody').innerHTML=`
+    <div class="detail-panel">
+      <div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><span class="card-title">Investor Profile</span><span class="badge ${stageInfo(inv.stage).badge}">${stageInfo(inv.stage).label}</span></div>
+          <div class="field-grid">
+            <span class="field-label">Firm</span><span class="field-value">${inv.firm}</span>
+            <span class="field-label">Name</span><span class="field-value">${inv.partner}</span>
+            <span class="field-label">Role</span><span class="field-value">${inv.role||'\u2014'}</span>
+            <span class="field-label">Email</span><span class="field-value">${inv.email||'\u2014'}</span>
+            <span class="field-label">Fund Size</span><span class="field-value">${inv.fundSize||'\u2014'}</span>
+            <span class="field-label">Check Size</span><span class="field-value">${inv.checkSize||'\u2014'}</span>
+            <span class="field-label">Type</span><span class="field-value">${typeBadge(inv.investorType)}</span>
+            <span class="field-label">Stage Focus</span><span class="field-value">${inv.stageFocus||'\u2014'}</span>
+            <span class="field-label">Sector</span><span class="field-value">${inv.sector||'\u2014'}</span>
+            <span class="field-label">Location</span><span class="field-value">${inv.location||'\u2014'}</span>
+            <span class="field-label">Priority</span><span class="field-value">${{high:'<span class="badge badge-red">High</span>',medium:'<span class="badge badge-amber">Medium</span>',low:'<span class="badge badge-blue">Low</span>'}[inv.priority]}</span>
+            <span class="field-label">Committed</span><span class="field-value" style="color:var(--emerald);font-weight:600;">${inv.committed?fmt$(inv.committed):'\u2014'}</span>
+            <span class="field-label">Intro Status</span><span class="field-value">${introLabels[inv.introStatus]||inv.introStatus}</span>
+            ${inv.linkedin?`<span class="field-label">LinkedIn</span><span class="field-value"><a href="${inv.linkedin}" target="_blank" style="color:var(--blue);">Profile</a></span>`:''}
+            ${inv.website?`<span class="field-label">Website</span><span class="field-value"><a href="${inv.website}" target="_blank" style="color:var(--blue);">${inv.website}</a></span>`:''}
+          </div>
+        </div>
+        ${inv.thesis||inv.fit?`<div class="card" style="margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:8px;">Thesis & Fit</div>
+          ${inv.thesis?`<p style="font-size:13px;color:var(--text2);margin-bottom:8px;"><strong>Thesis:</strong> ${inv.thesis}</p>`:''}
+          ${inv.fit?`<p style="font-size:13px;color:var(--text2);margin-bottom:8px;"><strong>Fit:</strong> ${inv.fit}</p>`:''}
+          ${inv.portfolio?`<p style="font-size:13px;color:var(--text2);margin-bottom:8px;"><strong>Portfolio:</strong> ${inv.portfolio}</p>`:''}
+          ${inv.concerns?`<p style="font-size:13px;color:var(--text2);"><strong>Concerns:</strong> ${inv.concerns}</p>`:''}
+        </div>`:''}
+        ${inv.introPath?`<div class="card" style="margin-bottom:16px;"><div class="card-title" style="margin-bottom:8px;">Warm Intro Path</div><p style="font-size:13px;color:var(--text2);">${inv.introPath}</p></div>`:''}
+        ${inv.notes?`<div class="card"><div class="card-title" style="margin-bottom:8px;">Notes</div><p style="font-size:13px;color:var(--text2);white-space:pre-wrap;">${inv.notes}</p></div>`:''}
+      </div>
+      <div class="detail-sidebar">
+        ${inv.nextAction?`<div class="card"><div class="card-title" style="margin-bottom:8px;">Next Action</div><p style="font-size:13px;font-weight:600;color:var(--amber);">${inv.nextAction}</p><p style="font-size:12px;color:var(--text3);margin-top:4px;">${inv.nextDate?fmtDate(inv.nextDate):'No date set'}</p></div>`:''}
+        <div class="card"><div class="card-header"><span class="card-title">Activity</span><span style="font-size:11px;color:var(--text3);">${acts.length} entries</span></div>${renderActivityItems(acts,10)}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">${renderOutreachPanel(inv)}</div>`;
+  document.getElementById('detailEditBtn').onclick=()=>{closeModal('detailModal');openInvestorModal(inv)};
+  document.getElementById('detailLogBtn').onclick=()=>{closeModal('detailModal');openLogModal(id)};
+  openModal('detailModal');
+}
+
+// ===== OUTREACHFLOW ACTIVITY FOR INVESTOR =====
+function getOutreachActivityForInvestor(inv) {
+  const email = (inv.email || '').toLowerCase();
+  if (!email) return { events: [], campaigns: [], emails: [], totalSent: 0, totalOpens: 0 };
+  const ofCampaigns = JSON.parse(localStorage.getItem('of_campaigns') || '[]');
+  const ofSentEmails = JSON.parse(localStorage.getItem('of_sentEmails') || '[]');
+  const events = [];
+  const campMatches = [];
+  // Campaign tracking
+  ofCampaigns.forEach(camp => {
+    if (!camp.tracking) return;
+    const myTracking = camp.tracking.filter(t => (t.email || '').toLowerCase() === email);
+    if (myTracking.length) {
+      campMatches.push({ campaign: camp, tracking: myTracking });
+      myTracking.forEach(t => {
+        events.push({ type: 'campaign_sent', date: t.sentAt, label: camp.name + (t.stepNum > 1 ? ' (Step ' + t.stepNum + ')' : ''), source: 'Campaign' });
+        if (t.opens && t.opens.length) {
+          t.opens.forEach(o => {
+            events.push({ type: 'campaign_opened', date: o.ts, label: camp.name + (t.stepNum > 1 ? ' (Step ' + t.stepNum + ')' : ''), source: 'Campaign' });
+          });
+        }
+      });
+    }
+  });
+  // One-off emails
+  const myEmails = ofSentEmails.filter(e => (e.to || '').toLowerCase() === email);
+  myEmails.forEach(e => {
+    events.push({ type: 'email_sent', date: e.sentAt, label: e.subject, source: 'One-off' });
+    if (e.opens && e.opens.length) {
+      e.opens.forEach(o => {
+        events.push({ type: 'email_opened', date: o.ts, label: e.subject, source: 'One-off' });
+      });
+    }
+  });
+  events.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const totalSent = events.filter(e => e.type.endsWith('_sent')).length;
+  const totalOpens = events.filter(e => e.type.endsWith('_opened')).length;
+  return { events, campaigns: campMatches, emails: myEmails, totalSent, totalOpens };
+}
+
+function renderOutreachPanel(inv) {
+  const data = getOutreachActivityForInvestor(inv);
+  if (!data.events.length) {
+    return `<div class="of-activity-section"><div class="of-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Activity</div><div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;">No OutreachFlow email activity found for ${inv.email}.<br>Send emails through OutreachFlow to see tracking here.</div></div>`;
+  }
+  // Summary stats
+  const lastOpen = data.events.find(e => e.type.endsWith('_opened'));
+  const statsHtml = `<div class="of-stats-row">
+    <div class="of-stat-chip"><div class="of-stat-val" style="color:var(--primary);">${data.totalSent}</div><div class="of-stat-lbl">Emails Sent</div></div>
+    <div class="of-stat-chip"><div class="of-stat-val" style="color:var(--green);">${data.totalOpens}</div><div class="of-stat-lbl">Times Opened</div></div>
+    <div class="of-stat-chip"><div class="of-stat-val" style="color:var(--amber);">${data.campaigns.length}</div><div class="of-stat-lbl">Campaigns</div></div>
+    <div class="of-stat-chip"><div class="of-stat-val" style="font-size:11px;color:var(--text2);">${lastOpen ? fmtDate(lastOpen.date) : 'Never'}</div><div class="of-stat-lbl">Last Opened</div></div>
+  </div>`;
+  // Tabs: timeline + table
+  const timelineHtml = data.events.slice(0, 15).map(e => {
+    let dot = 'sent', text = '';
+    if (e.type === 'campaign_sent') { dot = 'campaign'; text = `<strong>Campaign sent</strong> \u2014 ${e.label}`; }
+    else if (e.type === 'campaign_opened') { dot = 'opened'; text = `<strong>Opened campaign</strong> \u2014 ${e.label}`; }
+    else if (e.type === 'email_sent') { dot = 'sent'; text = `<strong>Email sent</strong> \u2014 ${e.label}`; }
+    else if (e.type === 'email_opened') { dot = 'opened'; text = `<strong>Opened email</strong> \u2014 ${e.label}`; }
+    return `<div class="of-tl-item"><div class="of-tl-dot ${dot}"></div><div class="of-tl-time">${fmtDate(e.date)}</div><div class="of-tl-text">${text}</div></div>`;
+  }).join('');
+  const tableHtml = `<table style="width:100%;"><thead><tr><th>When</th><th>Type</th><th>Email / Campaign</th><th>Status</th></tr></thead><tbody>` +
+    data.events.map(e => {
+      const badge = e.type.endsWith('_opened')
+        ? '<span class="badge badge-green">Opened</span>'
+        : '<span class="badge badge-blue">Sent</span>';
+      const src = e.source === 'Campaign' ? '<span class="badge badge-amber" style="font-size:10px;">Campaign</span>' : '<span class="badge badge-blue" style="font-size:10px;">One-off</span>';
+      return `<tr><td style="font-size:11px;white-space:nowrap;">${fmtDate(e.date)}</td><td>${src}</td><td style="font-size:12px;color:var(--text);">${e.label}</td><td>${badge}</td></tr>`;
+    }).join('') + '</tbody></table>';
+  const invId = inv.id.replace(/'/g, "\\'");
+  return `<div class="of-activity-section">
+    <div class="of-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Activity</div>
+    ${statsHtml}
+    <div class="of-tab-row">
+      <div class="of-tab active" onclick="switchOfTab('timeline','${invId}',this)">Timeline</div>
+      <div class="of-tab" onclick="switchOfTab('table','${invId}',this)">All Events</div>
+    </div>
+    <div id="ofTabTimeline_${inv.id}"><div class="of-timeline">${timelineHtml}</div>${data.events.length > 15 ? '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:8px;">Showing 15 of ' + data.events.length + ' events</div>' : ''}</div>
+    <div id="ofTabTable_${inv.id}" style="display:none;"><div class="table-wrap" style="max-height:300px;overflow-y:auto;">${tableHtml}</div></div>
+  </div>`;
+}
+
+function switchOfTab(tab, invId, el) {
+  el.parentElement.querySelectorAll('.of-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('ofTabTimeline_' + invId).style.display = tab === 'timeline' ? '' : 'none';
+  document.getElementById('ofTabTable_' + invId).style.display = tab === 'table' ? '' : 'none';
+}
+
+// ===== DASHBOARD =====
+function refreshDashboard(){
+  const total=DB.investors.length;
+  const active=DB.investors.filter(i=>i.stage!=='passed'&&i.stage!=='closed').length;
+  const committed=DB.investors.reduce((s,i)=>s+(i.committed||0),0);
+  const target=DB.round.target||0;
+  const meetings=DB.investors.filter(i=>['first_meeting','followup_dd','term_sheet'].includes(i.stage)).length;
+  const termSheets=DB.investors.filter(i=>i.stage==='term_sheet').length;
+  const closed=DB.investors.filter(i=>i.stage==='closed').length;
+  document.getElementById('dashStats').innerHTML=[
+    {label:'Total Investors',value:total,color:'var(--primary)'},
+    {label:'Active Pipeline',value:active,color:'var(--blue)'},
+    {label:'In Meetings / DD',value:meetings,color:'var(--amber)'},
+    {label:'Term Sheets',value:termSheets,color:'var(--emerald)'},
+    {label:'Committed',value:fmt$(committed),color:'var(--green)',sub:target?Math.round(committed/target*100)+'% of target':''},
+    {label:'Closed',value:closed,color:'var(--green)'},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value" style="color:${s.color};">${s.value}</div>${s.sub?`<div class="stat-sub">${s.sub}</div>`:''}</div>`).join('');
+  document.getElementById('roundBadge').innerHTML=DB.round.name?`<span class="badge badge-emerald">${DB.round.name} \u2014 Target: ${fmt$(target)}</span>`:'';
+  drawPipelineChart();
+  const prog=document.getElementById('commitProgress');
+  const pct=target?Math.min(100,Math.round(committed/target*100)):0;
+  prog.innerHTML=`
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:36px;font-weight:700;color:var(--emerald);">${fmt$(committed)}</div>
+      <div style="font-size:13px;color:var(--text3);">of ${fmt$(target)} target</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;height:16px;overflow:hidden;margin-bottom:12px;">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--emerald),var(--green));border-radius:8px;transition:width .4s ease;"></div>
+    </div>
+    <div style="text-align:center;font-size:14px;font-weight:600;color:${pct>=100?'var(--green)':'var(--amber)'};">${pct}% committed</div>
+    <div style="margin-top:20px;">${DB.investors.filter(i=>i.committed>0).sort((a,b)=>b.committed-a.committed).slice(0,5).map(i=>`
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span style="color:var(--text);">${i.firm}</span><span style="color:var(--emerald);font-weight:600;">${fmt$(i.committed)}</span>
+      </div>`).join('')||'<p style="font-size:13px;color:var(--text3);">No commitments yet</p>'}
+    </div>`;
+  const upcoming=DB.investors.filter(i=>i.nextAction&&i.nextDate).sort((a,b)=>new Date(a.nextDate)-new Date(b.nextDate)).slice(0,5);
+  document.getElementById('upcomingActions').innerHTML=upcoming.length?upcoming.map(i=>{
+    const isOverdue=new Date(i.nextDate)<new Date();
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;" onclick="openDetail('${i.id}')">
+      <div><span style="color:var(--text);font-weight:500;">${i.firm}</span><span style="color:var(--text3);margin-left:8px;">${i.nextAction}</span></div>
+      <span style="font-size:11px;color:${isOverdue?'var(--red)':'var(--text3)'};">${isOverdue?'OVERDUE \u2022 ':''}${fmtDate(i.nextDate)}</span>
+    </div>`;
+  }).join(''):'<p style="font-size:13px;color:var(--text3);padding:8px;">No upcoming actions.</p>';
+  document.getElementById('recentActivity').innerHTML=renderActivityItems(DB.activities,5);
+}
+function drawPipelineChart(){
+  const canvas=document.getElementById('pipelineChart');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.parentElement.clientWidth-40;canvas.height=240;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const stages=STAGES.filter(s=>s.id!=='passed');
+  const data=stages.map(s=>DB.investors.filter(i=>i.stage===s.id).length);
+  const max=Math.max(...data,1);
+  const w=canvas.width,h=canvas.height;
+  const barW=(w-60)/stages.length*.6;
+  const gap=(w-60)/stages.length;
+  const colors=['#6366f1','#3b82f6','#06b6d4','#f59e0b','#ec4899','#10b981','#22c55e'];
+  stages.forEach((s,i)=>{
+    const x=40+i*gap+gap/2;
+    const barH=data[i]?((data[i]/max)*(h-50)):0;
+    ctx.fillStyle=colors[i%colors.length];
+    if(barH>0){ctx.beginPath();ctx.roundRect(x-barW/2,h-25-barH,barW,barH,[4,4,0,0]);ctx.fill()}
+    ctx.fillStyle='#6b7394';ctx.font='9px sans-serif';ctx.textAlign='center';
+    ctx.fillText(s.label.split(' ')[0],x,h-6);
+    if(data[i])ctx.fillText(data[i],x,h-31-barH);
+  });
+}
+
+// ===== ACTIVITY PAGE =====
+function renderFullActivity(){
+  document.getElementById('fullActivityLog').innerHTML=renderActivityItems(DB.activities);
+}
+
+// ===== ROUND SETTINGS =====
+function loadRound(){
+  const r=DB.round;
+  document.getElementById('roundName').value=r.name||'';
+  document.getElementById('roundTarget').value=r.target||'';
+  document.getElementById('roundMinCheck').value=r.minCheck||'';
+  document.getElementById('roundValuation').value=r.valuation||'';
+  document.getElementById('roundInstrument').value=r.instrument||'Priced Equity';
+  document.getElementById('roundCloseDate').value=r.closeDate||'';
+  document.getElementById('roundNotes').value=r.notes||'';
+}
+function saveRound(){
+  DB.round={
+    name:document.getElementById('roundName').value.trim(),
+    target:parseFloat(document.getElementById('roundTarget').value)||0,
+    minCheck:parseFloat(document.getElementById('roundMinCheck').value)||0,
+    valuation:parseFloat(document.getElementById('roundValuation').value)||0,
+    instrument:document.getElementById('roundInstrument').value,
+    closeDate:document.getElementById('roundCloseDate').value,
+    notes:document.getElementById('roundNotes').value.trim(),
+  };
+  persist('round');
+}
+
+// ===== OUTREACHFLOW INTEGRATION (stays localStorage) =====
+function syncToOutreach(inv){
+  const ofContacts=JSON.parse(localStorage.getItem('of_contacts')||'[]');
+  const listName=DB.syncSettings.listName||'Fundraise Investors';
+  const existing=ofContacts.findIndex(c=>c.email===inv.email);
+  const contact={
+    firstName:inv.partner.split(' ')[0]||'',
+    lastName:inv.partner.split(' ').slice(1).join(' ')||'',
+    email:inv.email,
+    company:inv.firm,
+    title:inv.stageFocus+' Investor',
+    phone:'',
+    linkedin:inv.linkedin||'',
+    list:listName,
+    status:'active',
+    custom:{
+      fund_size:inv.fundSize,check_size:inv.checkSize,sector:inv.sector,
+      pipeline_stage:stageInfo(inv.stage).label,priority:inv.priority,
+      location:inv.location,intro_status:inv.introStatus,
+    },
+  };
+  if(existing>=0){
+    ofContacts[existing]={...ofContacts[existing],...contact};
+  }else{
+    contact.id=uid();contact.createdAt=new Date().toISOString();
+    ofContacts.push(contact);
+  }
+  localStorage.setItem('of_contacts',JSON.stringify(ofContacts));
+}
+function syncAllToOutreach(){
+  let synced=0;
+  DB.investors.forEach(inv=>{
+    if(inv.email){syncToOutreach(inv);synced++}
+  });
+  document.getElementById('syncResult').innerHTML=`<span class="sync-badge">Synced ${synced} investors to OutreachFlow</span>`;
+  toast(`${synced} investors synced to OutreachFlow`);
+}
+function pullFromOutreach(){
+  const ofCampaigns=JSON.parse(localStorage.getItem('of_campaigns')||'[]');
+  const listName=DB.syncSettings.listName||'Fundraise Investors';
+  const relevant=ofCampaigns.filter(c=>c.contactList===listName);
+  if(!relevant.length){
+    document.getElementById('syncResult').innerHTML='<span style="color:var(--text3);">No OutreachFlow campaigns found targeting the investor list.</span>';
+    return;
+  }
+  let totalSent=0,totalOpened=0,totalReplied=0;
+  relevant.forEach(c=>{if(c.stats){totalSent+=c.stats.sent;totalOpened+=c.stats.opened;totalReplied+=c.stats.replied}});
+  document.getElementById('syncResult').innerHTML=`<div style="margin-top:8px;padding:12px;background:var(--bg3);border-radius:var(--radius);font-size:13px;">
+    <strong>OutreachFlow Campaign Stats (${relevant.length} campaigns):</strong><br>
+    Sent: ${totalSent} \u00B7 Opened: ${totalOpened} (${totalSent?Math.round(totalOpened/totalSent*100):0}%) \u00B7 Replied: ${totalReplied} (${totalSent?Math.round(totalReplied/totalSent*100):0}%)
+  </div>`;
+  toast('Pulled campaign stats from OutreachFlow');
+}
+function saveSyncSettings(){
+  DB.syncSettings.listName=document.getElementById('syncListName').value;
+  DB.syncSettings.autoSync=document.getElementById('autoSync').checked;
+  persist('syncSettings');
+}
+function refreshSyncPage(){
+  document.getElementById('syncListName').value=DB.syncSettings.listName||'Fundraise Investors';
+  document.getElementById('autoSync').checked=DB.syncSettings.autoSync!==false;
+  const ofContacts=JSON.parse(localStorage.getItem('of_contacts')||'[]');
+  const listName=DB.syncSettings.listName||'Fundraise Investors';
+  const synced=ofContacts.filter(c=>c.list===listName).length;
+  const totalInvestors=DB.investors.filter(i=>i.email).length;
+  document.getElementById('syncDetails').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>CRM investors with email: <strong>${totalInvestors}</strong></div>
+      <div>Synced to OutreachFlow: <strong>${synced}</strong></div>
+    </div>`;
+}
+
+// ===== CSV EXPORT =====
+function exportCSV(){
+  const headers=['Firm','Name','Role','Type','Email','Stage','Fund Size','Check Size','Stage Focus','Sector','Location','Priority','Committed','Next Action','Next Action Date','Intro Status','Notes'];
+  const rows=DB.investors.map(i=>[i.firm,i.partner,i.role||'',i.investorType||'',i.email,stageInfo(i.stage).label,i.fundSize,i.checkSize,i.stageFocus,i.sector,i.location,i.priority,i.committed||'',i.nextAction,i.nextDate,i.introStatus,i.notes].map(v=>'"'+(v||'').toString().replace(/"/g,'""')+'"'));
+  const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='stillport-investors.csv';a.click();
+  toast('CSV exported');
+}
+
+// ===== HELPERS =====
+function updatePipelineCount(){
+  document.getElementById('pipelineCount').textContent=DB.investors.filter(i=>i.stage!=='passed'&&i.stage!=='closed').length;
+}
+function renderCurrentPage(){
+  const active=document.querySelector('.page.active');
+  if(active){const page=active.id.replace('page-','');showPage(page)}
+}
+function globalSearchHandler(v){
+  if(v.length>=2){showPage('investors');renderInvestorTable(v)}
+}
+
+// ===== INIT =====
+// Try to auto-login with cached session
+(async function init() {
+  cloudConfig = JSON.parse(localStorage.getItem(CLOUD_CFG_KEY) || '{}');
+
+  // If MSAL can init and has a cached account, auto-login silently
+  if (cloudConfig.clientId && cloudConfig.tenantId && initMSAL()) {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      currentUser = accounts[0];
+      isCloudMode = true;
+      document.getElementById('loginOverlay').classList.add('hidden');
+      await loadAppWithCloud();
+      return;
+    }
+  }
+
+  // Otherwise show login screen
+  document.getElementById('loginOverlay').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>
