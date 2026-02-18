@@ -133,6 +133,8 @@ tr{cursor:pointer}
 
 /* Activity Log */
 .activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.activity-email{border-radius:var(--radius);padding:10px 8px;margin:0 -8px;transition:var(--transition)}
+.activity-email:hover{background:var(--bg3)}
 .activity-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
 .activity-content{flex:1}
 .activity-text{font-size:13px;color:var(--text2)}
@@ -318,6 +320,11 @@ tr{cursor:pointer}
       </div>
       <div class="nav-section">
         <div class="nav-section-title">Integration</div>
+        <button class="nav-item" data-page="outlooksync" onclick="showPage('outlooksync')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
+          Outlook Sync
+          <span class="nav-badge" id="emailSyncBadge" style="display:none;">0</span>
+        </button>
         <button class="nav-item" data-page="sync" onclick="showPage('sync')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
           OutreachFlow Sync
@@ -336,6 +343,10 @@ tr{cursor:pointer}
       <div class="sidebar-sync-row">
         <span class="sidebar-sync-dot" style="background:var(--emerald)"></span>
         <span>OutreachFlow linked</span>
+      </div>
+      <div class="sidebar-sync-row" id="outlookSyncStatusRow">
+        <span class="sidebar-sync-dot" id="outlookSyncDot" style="background:var(--text3)"></span>
+        <span id="outlookSyncLabel">Outlook: not synced</span>
       </div>
       <div class="sidebar-sync-row" id="lastSyncRow" style="display:none;">
         <span id="lastSyncLabel" style="color:var(--text3);font-size:10px;"></span>
@@ -488,6 +499,50 @@ tr{cursor:pointer}
         </div>
       </div>
 
+      <!-- OUTLOOK SYNC -->
+      <div class="page" id="page-outlooksync">
+        <div class="page-header"><h2>Outlook Email Sync</h2></div>
+        <div class="card" style="max-width:640px;">
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Automatically tracks email correspondence with CRM investors by scanning your Outlook inbox and sent items. Emails are matched by contact email address and company domain, then logged as activities in the CRM timeline.</p>
+          <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="stat-card"><div class="stat-label">Last Sync</div><div class="stat-value" style="font-size:16px;" id="olSyncTime">Never</div></div>
+            <div class="stat-card"><div class="stat-label">Emails Tracked</div><div class="stat-value" style="font-size:16px;" id="olSyncTotal">0</div></div>
+            <div class="stat-card"><div class="stat-label">Status</div><div class="stat-value" style="font-size:16px;" id="olSyncStatus">Idle</div></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button class="btn btn-primary" id="olSyncBtn" onclick="manualOutlookSync()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>
+              Sync Now
+            </button>
+          </div>
+          <div id="olSyncResult" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="card-title" style="margin-bottom:8px;">Settings</div>
+            <div class="form-group" style="margin-top:12px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="olAutoSync" checked onchange="saveOlSyncSettings()" style="accent-color:var(--primary);width:16px;height:16px;"> Sync emails automatically on app load</label>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Lookback Window (days)</label>
+              <select class="form-select" id="olLookbackDays" onchange="saveOlSyncSettings()" style="max-width:120px;">
+                <option value="7">7 days</option>
+                <option value="14" selected>14 days</option>
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="card-title" style="margin-bottom:8px;">Recent Synced Emails</div>
+            <div id="olSyncLog" style="font-size:13px;color:var(--text2);max-height:300px;overflow-y:auto;"></div>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="card-title" style="margin-bottom:8px;">How It Works</div>
+            <p style="font-size:12px;color:var(--text3);line-height:1.6;">This integration uses Microsoft Graph API with the <strong>Mail.Read</strong> permission to scan your inbox and sent items. Emails are matched against CRM investor contacts by exact email address, with a fallback to company domain matching. Internal @stillport.co emails are excluded. Each matched email is logged as an activity — <span style="color:var(--blue);">&#9679;</span> Email Sent or <span style="color:var(--cyan);">&#9679;</span> Email Received — visible in the Activity Log and individual investor timelines.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- CLOUD SETTINGS (new) -->
       <div class="page" id="page-cloudsettings">
         <div class="page-header"><h2>Cloud Settings</h2></div>
@@ -597,6 +652,24 @@ tr{cursor:pointer}
   </div>
 </div>
 
+<!-- EMAIL VIEWER MODAL -->
+<div class="modal-overlay" id="emailModal">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <h3 id="emailModalTitle" style="font-size:15px;">Email</h3>
+      <button class="modal-close" onclick="closeModal('emailModal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div id="emailModalMeta" style="padding:16px 20px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);"></div>
+      <div id="emailModalBody" style="padding:20px;font-size:13px;color:var(--text);line-height:1.7;max-height:60vh;overflow-y:auto;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('emailModal')">Close</button>
+      <a class="btn btn-primary" id="emailModalWebLink" href="#" target="_blank" style="text-decoration:none;">Open in Outlook</a>
+    </div>
+  </div>
+</div>
+
 <!-- INVESTOR DETAIL MODAL -->
 <div class="modal-overlay" id="detailModal">
   <div class="modal" style="max-width:900px;">
@@ -659,7 +732,7 @@ async function handleLogin() {
 
   try {
     const loginResp = await msalInstance.loginPopup({
-      scopes: ['User.Read', 'Files.ReadWrite'],
+      scopes: ['User.Read', 'Files.ReadWrite', 'Mail.Read'],
     });
     currentUser = loginResp.account;
     isCloudMode = true;
@@ -692,17 +765,18 @@ async function handleLogout() {
   location.reload();
 }
 
-async function getAccessToken() {
+async function getAccessToken(extraScopes) {
   if (!msalInstance || !currentUser) return null;
+  const scopes = ['Files.ReadWrite', ...(extraScopes || [])];
   try {
     const resp = await msalInstance.acquireTokenSilent({
-      scopes: ['Files.ReadWrite'],
+      scopes,
       account: currentUser,
     });
     return resp.accessToken;
   } catch (e) {
     try {
-      const resp = await msalInstance.acquireTokenPopup({ scopes: ['Files.ReadWrite'] });
+      const resp = await msalInstance.acquireTokenPopup({ scopes });
       return resp.accessToken;
     } catch (e2) { console.error('Token error:', e2); return null; }
   }
@@ -846,6 +920,10 @@ async function loadAppWithCloud() {
   updatePipelineCount();
   refreshDashboard();
   loadCloudConfig();
+
+  // Sync Outlook emails on load (non-blocking)
+  updateOutlookSyncUI();
+  syncOutlookEmails();
 
   // Start auto-refresh every 30 seconds
   autoRefreshInterval = setInterval(autoRefreshFromCloud, 30000);
@@ -1017,13 +1095,14 @@ function showPage(page){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const nav=document.querySelector(`.nav-item[data-page="${page}"]`);
   if(nav)nav.classList.add('active');
-  const titles={dashboard:'Fundraise Dashboard',pipeline:'Pipeline',investors:'All Investors',activity:'Activity Log',round:'Round Settings',sync:'OutreachFlow Integration',cloudsettings:'Cloud Settings'};
+  const titles={dashboard:'Fundraise Dashboard',pipeline:'Pipeline',investors:'All Investors',activity:'Activity Log',round:'Round Settings',outlooksync:'Outlook Email Sync',sync:'OutreachFlow Integration',cloudsettings:'Cloud Settings'};
   document.getElementById('topbarTitle').textContent=titles[page]||page;
   if(page==='dashboard')refreshDashboard();
   if(page==='pipeline')renderKanban();
   if(page==='investors')renderInvestorTable();
   if(page==='activity')renderFullActivity();
   if(page==='round')loadRound();
+  if(page==='outlooksync')renderOutlookSyncPage();
   if(page==='sync')refreshSyncPage();
   if(page==='cloudsettings')loadCloudConfig();
 }
@@ -1162,14 +1241,307 @@ function renderActivityItems(activities,limit){
   return items.map(a=>{
     const inv=DB.investors.find(i=>i.id===a.investorId);
     const byUser = a.user ? ` by ${a.user.split('@')[0]}` : '';
-    return`<div class="activity-item">
+    const isEmail = (a.type==='email'||a.type==='email_received') && a.msgId;
+    const clickAttr = isEmail ? `onclick="openEmail('${a.msgId}')" style="cursor:pointer;"` : '';
+    const hoverHint = isEmail ? ' title="Click to read email"' : '';
+    return`<div class="activity-item${isEmail?' activity-email':''}" ${clickAttr}${hoverHint}>
       <div class="activity-dot" style="background:${actTypeColors[a.type]||'var(--text3)'}"></div>
       <div class="activity-content">
-        <div class="activity-text"><strong>${inv?inv.firm:'Unknown'}</strong> \u2014 ${a.description}</div>
+        <div class="activity-text"><strong>${inv?inv.firm:'Unknown'}</strong> \u2014 ${a.description}${isEmail?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-left:6px;opacity:.5;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>':''}</div>
         <div class="activity-time">${actTypeLabels[a.type]||a.type}${byUser} \u00B7 ${fmtDate(a.date)}</div>
       </div>
     </div>`;
   }).join('');
+}
+
+// ===== EMAIL VIEWER =====
+async function openEmail(msgId) {
+  if (!msgId || !isCloudMode) { toast('Sign in to view emails', 'error'); return; }
+  const meta = document.getElementById('emailModalMeta');
+  const body = document.getElementById('emailModalBody');
+  const title = document.getElementById('emailModalTitle');
+  const webLink = document.getElementById('emailModalWebLink');
+  title.textContent = 'Loading email...';
+  meta.innerHTML = '<span style="color:var(--text3);">Fetching from Outlook...</span>';
+  body.innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner" style="margin:0 auto;"></div></div>';
+  webLink.href = '#'; webLink.style.display = 'none';
+  openModal('emailModal');
+
+  try {
+    const token = await getAccessToken(['Mail.Read']);
+    if (!token) { body.innerHTML = '<p style="color:var(--red);">Could not get mail access token.</p>'; return; }
+    const resp = await fetch(`${GRAPH_BASE}/me/messages/${msgId}?$select=subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,webLink,importance,hasAttachments`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!resp.ok) { body.innerHTML = `<p style="color:var(--red);">Could not load email (HTTP ${resp.status}). The email may have been deleted.</p>`; return; }
+    const msg = await resp.json();
+
+    // Title
+    title.textContent = msg.subject || '(no subject)';
+
+    // Meta
+    const fromAddr = msg.from?.emailAddress?.address || '';
+    const fromName = msg.from?.emailAddress?.name || fromAddr;
+    const toList = (msg.toRecipients || []).map(r => r.emailAddress?.name || r.emailAddress?.address).join(', ');
+    const ccList = (msg.ccRecipients || []).map(r => r.emailAddress?.name || r.emailAddress?.address).join(', ');
+    const date = msg.receivedDateTime || msg.sentDateTime;
+    meta.innerHTML = `
+      <div style="display:grid;grid-template-columns:60px 1fr;gap:4px 12px;">
+        <span style="color:var(--text3);font-weight:600;">From</span><span>${fromName} &lt;${fromAddr}&gt;</span>
+        <span style="color:var(--text3);font-weight:600;">To</span><span>${toList || '\u2014'}</span>
+        ${ccList ? `<span style="color:var(--text3);font-weight:600;">Cc</span><span>${ccList}</span>` : ''}
+        <span style="color:var(--text3);font-weight:600;">Date</span><span>${date ? new Date(date).toLocaleString() : '\u2014'}</span>
+        ${msg.hasAttachments ? '<span style="color:var(--text3);font-weight:600;">Files</span><span style="color:var(--amber);">Has attachments</span>' : ''}
+      </div>`;
+
+    // Body
+    if (msg.body?.contentType === 'html') {
+      // Sanitize and render HTML email
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'width:100%;border:none;min-height:300px;background:#fff;border-radius:4px;';
+      iframe.sandbox = 'allow-same-origin';
+      body.innerHTML = '';
+      body.appendChild(iframe);
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write('<base target="_blank"><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;color:#333;padding:16px;margin:0;line-height:1.6;word-wrap:break-word;}img{max-width:100%;height:auto;}a{color:#3b82f6;}pre,code{white-space:pre-wrap;word-break:break-all;}</style>' + msg.body.content);
+      doc.close();
+      // Auto-resize iframe
+      setTimeout(() => { iframe.style.height = Math.min(doc.body.scrollHeight + 40, 600) + 'px'; }, 200);
+    } else {
+      body.innerHTML = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:inherit;margin:0;">${(msg.body?.content || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
+    }
+
+    // Open in Outlook link
+    if (msg.webLink) { webLink.href = msg.webLink; webLink.style.display = ''; }
+  } catch (e) {
+    console.error('[EmailViewer] Error:', e);
+    body.innerHTML = `<p style="color:var(--red);">Error loading email: ${e.message}</p>`;
+  }
+}
+
+// ===== OUTLOOK EMAIL SYNC =====
+let emailSyncRunning = false;
+
+async function syncOutlookEmails(force) {
+  if (!isCloudMode || emailSyncRunning) return;
+  if (!force && olSyncState.autoSync === false) return;
+  if (!DB.investors.length) return;
+  emailSyncRunning = true;
+  olSyncState.status = 'syncing';
+  updateOutlookSyncUI();
+  console.log('[EmailSync] Starting Outlook email sync...');
+
+  try {
+    const token = await getAccessToken(['Mail.Read']);
+    if (!token) { console.warn('[EmailSync] No mail token'); emailSyncRunning = false; return; }
+
+    // Build email lookup from CRM investors
+    const emailMap = {};   // email -> investor
+    const domainMap = {};  // domain -> [investors]
+    DB.investors.forEach(inv => {
+      if (!inv.email || !inv.email.trim()) return;
+      const em = inv.email.trim().toLowerCase();
+      emailMap[em] = inv;
+      const domain = em.split('@')[1];
+      if (domain) {
+        if (!domainMap[domain]) domainMap[domain] = [];
+        domainMap[domain].push(inv);
+      }
+    });
+    const contactCount = Object.keys(emailMap).length;
+    if (!contactCount) { console.log('[EmailSync] No contacts with emails'); emailSyncRunning = false; return; }
+
+    // Date range: configurable lookback
+    const days = olSyncState.lookbackDays || 14;
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const fields = 'subject,sender,toRecipients,ccRecipients,sentDateTime,receivedDateTime,isDraft';
+    const filter = `receivedDateTime ge ${since}`;
+
+    // Fetch inbox + sent in parallel
+    const [inboxResp, sentResp] = await Promise.all([
+      fetch(`${GRAPH_BASE}/me/messages?$filter=${encodeURIComponent(filter)}&$select=${fields}&$top=200&$orderby=receivedDateTime desc`, { headers }),
+      fetch(`${GRAPH_BASE}/me/mailFolders/SentItems/messages?$filter=${encodeURIComponent(filter)}&$select=${fields}&$top=200&$orderby=sentDateTime desc`, { headers }),
+    ]);
+
+    let inboxEmails = [], sentEmails = [];
+    if (inboxResp.ok) { const d = await inboxResp.json(); inboxEmails = d.value || []; }
+    else console.warn('[EmailSync] Inbox fetch failed:', inboxResp.status);
+    if (sentResp.ok) { const d = await sentResp.json(); sentEmails = d.value || []; }
+    else console.warn('[EmailSync] Sent fetch failed:', sentResp.status);
+
+    console.log(`[EmailSync] Fetched ${inboxEmails.length} inbox + ${sentEmails.length} sent emails`);
+
+    // Existing activity fingerprints to prevent duplicates
+    const existingFP = new Set();
+    DB.activities.forEach(a => {
+      if (a.type === 'email' || a.type === 'email_received') {
+        existingFP.add(`${a.investorId}|${a.date}|${a.type}`);
+      }
+    });
+
+    let newCount = 0;
+    const userEmail = (currentUser?.username || '').toLowerCase();
+
+    // Process RECEIVED emails — match sender against CRM contacts
+    inboxEmails.forEach(msg => {
+      if (msg.isDraft) return;
+      const senderAddr = msg.sender?.emailAddress?.address?.toLowerCase() || '';
+      if (!senderAddr || senderAddr === userEmail) return;
+      // Skip internal @stillport.co emails
+      if (senderAddr.endsWith('@stillport.co')) return;
+
+      let inv = emailMap[senderAddr];
+      if (!inv) {
+        const domain = senderAddr.split('@')[1];
+        if (domainMap[domain]) inv = domainMap[domain][0];
+      }
+      if (!inv) return;
+
+      const date = msg.receivedDateTime || msg.sentDateTime;
+      const fp = `${inv.id}|${date}|email_received`;
+      if (existingFP.has(fp)) return;
+      existingFP.add(fp);
+
+      DB.activities.push({
+        id: uid(), investorId: inv.id, type: 'email_received',
+        description: `Received: ${msg.subject || '(no subject)'}`,
+        date: date, user: 'outlook-sync', msgId: msg.id || '',
+      });
+      newCount++;
+    });
+
+    // Process SENT emails — match recipients against CRM contacts
+    sentEmails.forEach(msg => {
+      if (msg.isDraft) return;
+      const recipients = [...(msg.toRecipients || []), ...(msg.ccRecipients || [])];
+      const matched = new Set();
+
+      recipients.forEach(r => {
+        const addr = r.emailAddress?.address?.toLowerCase() || '';
+        if (!addr || addr === userEmail || addr.endsWith('@stillport.co')) return;
+
+        let inv = emailMap[addr];
+        if (!inv) {
+          const domain = addr.split('@')[1];
+          if (domainMap[domain]) inv = domainMap[domain][0];
+        }
+        if (!inv || matched.has(inv.id)) return;
+        matched.add(inv.id);
+
+        const date = msg.sentDateTime || msg.receivedDateTime;
+        const fp = `${inv.id}|${date}|email`;
+        if (existingFP.has(fp)) return;
+        existingFP.add(fp);
+
+        DB.activities.push({
+          id: uid(), investorId: inv.id, type: 'email',
+          description: `Sent: ${msg.subject || '(no subject)'}`,
+          date: date, user: 'outlook-sync', msgId: msg.id || '',
+        });
+        newCount++;
+      });
+    });
+
+    if (newCount > 0) {
+      persist('activities');
+      console.log(`[EmailSync] Synced ${newCount} new email activities`);
+      toast(`Synced ${newCount} email${newCount > 1 ? 's' : ''} from Outlook`, 'success');
+      renderCurrentPage();
+    } else {
+      console.log('[EmailSync] No new email activities found');
+    }
+
+    // Update UI state
+    olSyncState.lastSync = new Date().toISOString();
+    olSyncState.status = 'synced';
+    olSyncState.lastNewCount = newCount;
+    const emailActs = DB.activities.filter(a => a.user === 'outlook-sync');
+    olSyncState.totalTracked = emailActs.length;
+    localStorage.setItem('sp_olsync', JSON.stringify(olSyncState));
+    updateOutlookSyncUI();
+  } catch (e) {
+    console.error('[EmailSync] Error:', e);
+    olSyncState.status = 'error';
+    updateOutlookSyncUI();
+  }
+  emailSyncRunning = false;
+}
+
+// Outlook Sync UI state
+let olSyncState = JSON.parse(localStorage.getItem('sp_olsync') || '{}');
+if (!olSyncState.autoSync && olSyncState.autoSync !== false) olSyncState.autoSync = true;
+if (!olSyncState.lookbackDays) olSyncState.lookbackDays = 14;
+
+function updateOutlookSyncUI() {
+  // Sidebar dot
+  const dot = document.getElementById('outlookSyncDot');
+  const label = document.getElementById('outlookSyncLabel');
+  if (dot && label) {
+    if (olSyncState.status === 'synced') { dot.style.background = 'var(--blue)'; label.textContent = 'Outlook synced'; }
+    else if (olSyncState.status === 'syncing') { dot.style.background = 'var(--amber)'; label.textContent = 'Outlook syncing...'; }
+    else if (olSyncState.status === 'error') { dot.style.background = 'var(--red)'; label.textContent = 'Outlook sync error'; }
+    else { dot.style.background = 'var(--text3)'; label.textContent = 'Outlook: not synced'; }
+  }
+  // Nav badge
+  const badge = document.getElementById('emailSyncBadge');
+  if (badge) {
+    const ct = olSyncState.totalTracked || 0;
+    if (ct > 0) { badge.textContent = ct; badge.style.display = ''; }
+    else badge.style.display = 'none';
+  }
+  // Page stats (if visible)
+  const timeEl = document.getElementById('olSyncTime');
+  if (timeEl) {
+    timeEl.textContent = olSyncState.lastSync ? fmtDate(olSyncState.lastSync) : 'Never';
+    document.getElementById('olSyncTotal').textContent = olSyncState.totalTracked || 0;
+    const statusEl = document.getElementById('olSyncStatus');
+    if (emailSyncRunning) statusEl.textContent = 'Syncing...';
+    else if (olSyncState.status === 'synced') statusEl.textContent = 'Synced';
+    else if (olSyncState.status === 'error') statusEl.textContent = 'Error';
+    else statusEl.textContent = 'Idle';
+  }
+}
+
+function renderOutlookSyncPage() {
+  // Load settings into form
+  const autoEl = document.getElementById('olAutoSync');
+  const lookEl = document.getElementById('olLookbackDays');
+  if (autoEl) autoEl.checked = olSyncState.autoSync !== false;
+  if (lookEl) lookEl.value = olSyncState.lookbackDays || 14;
+  updateOutlookSyncUI();
+  // Render recent synced emails
+  const log = document.getElementById('olSyncLog');
+  if (log) {
+    const emailActs = DB.activities.filter(a => a.user === 'outlook-sync').sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
+    if (!emailActs.length) { log.innerHTML = '<p style="color:var(--text3);">No emails synced yet. Emails will appear here once you start corresponding with investors in the CRM.</p>'; return; }
+    log.innerHTML = emailActs.map(a => {
+      const inv = DB.investors.find(i => i.id === a.investorId);
+      const color = a.type === 'email' ? 'var(--blue)' : 'var(--cyan)';
+      const typeLabel = a.type === 'email' ? 'Sent' : 'Received';
+      return `<div class="activity-item"><div class="activity-dot" style="background:${color}"></div><div class="activity-content"><div class="activity-text"><strong>${inv ? inv.firm : 'Unknown'}</strong> &mdash; ${a.description}</div><div class="activity-time">${typeLabel} &middot; ${fmtDate(a.date)}</div></div></div>`;
+    }).join('');
+  }
+}
+
+function saveOlSyncSettings() {
+  olSyncState.autoSync = document.getElementById('olAutoSync').checked;
+  olSyncState.lookbackDays = parseInt(document.getElementById('olLookbackDays').value) || 14;
+  localStorage.setItem('sp_olsync', JSON.stringify(olSyncState));
+  toast('Outlook sync settings saved');
+}
+
+async function manualOutlookSync() {
+  if (emailSyncRunning) { toast('Sync already in progress', 'error'); return; }
+  if (!isCloudMode) { toast('Sign in with Microsoft first', 'error'); return; }
+  const btn = document.getElementById('olSyncBtn');
+  btn.disabled = true; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;animation:spin 1s linear infinite;"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg> Syncing...';
+  olSyncState.status = 'syncing';
+  updateOutlookSyncUI();
+  await syncOutlookEmails(true);
+  btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg> Sync Now';
+  renderOutlookSyncPage();
 }
 
 // ===== KANBAN =====
@@ -1177,7 +1549,7 @@ let draggedCard=null;
 function renderKanban(){
   const kanban=document.getElementById('kanbanView');
   kanban.innerHTML=STAGES.map(stage=>{
-    const investors=DB.investors.filter(i=>i.stage===stage.id);
+    const investors=DB.investors.filter(i=>i.stage===stage.id).sort((a,b)=>(a.firm||'').localeCompare(b.firm||''));
     const total=investors.reduce((s,i)=>s+(i.committed||0),0);
     return`<div class="kanban-col" data-stage="${stage.id}" ondragover="event.preventDefault();this.style.background='var(--bg3)'" ondragleave="this.style.background=''" ondrop="dropCard(event,'${stage.id}');this.style.background=''">
       <div class="kanban-col-header">
