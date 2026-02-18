@@ -1357,12 +1357,13 @@ async function syncOutlookEmails(force) {
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const fields = 'subject,sender,toRecipients,ccRecipients,sentDateTime,receivedDateTime,isDraft';
-    const filter = `receivedDateTime ge ${since}`;
+    const inboxFilter = `receivedDateTime ge ${since}`;
+    const sentFilter = `sentDateTime ge ${since}`;
 
     // Fetch inbox + sent in parallel
     const [inboxResp, sentResp] = await Promise.all([
-      fetch(`${GRAPH_BASE}/me/messages?$filter=${encodeURIComponent(filter)}&$select=${fields}&$top=200&$orderby=receivedDateTime desc`, { headers }),
-      fetch(`${GRAPH_BASE}/me/mailFolders/SentItems/messages?$filter=${encodeURIComponent(filter)}&$select=${fields}&$top=200&$orderby=sentDateTime desc`, { headers }),
+      fetch(`${GRAPH_BASE}/me/messages?$filter=${encodeURIComponent(inboxFilter)}&$select=${fields}&$top=200&$orderby=receivedDateTime desc`, { headers }),
+      fetch(`${GRAPH_BASE}/me/mailFolders/SentItems/messages?$filter=${encodeURIComponent(sentFilter)}&$select=${fields}&$top=200&$orderby=sentDateTime desc`, { headers }),
     ]);
 
     let inboxEmails = [], sentEmails = [];
