@@ -1068,8 +1068,8 @@ Write a professional strategy briefing with these sections:
 6. ACQUISITION ECONOMICS ASSESSMENT
 7. RECOMMENDATION (go/no-go with conditions)
 
-Return ONLY a JSON object: { "sections": [ { "title": "string", "content": "string" } ] }
-Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
+Return ONLY valid JSON with no markdown formatting or code fences: { "sections": [ { "title": "string", "content": "string" } ] }
+Important: Do not use newlines or special characters inside JSON string values. Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
 
       const response = await fetch("/api/score", {
         method: "POST",
@@ -1078,9 +1078,25 @@ Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
       });
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const data = await response.json();
-      const jsonMatch = data.content[0].text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Could not parse briefing response");
-      const briefing = JSON.parse(jsonMatch[0]);
+      const rawText = data.content[0].text;
+      // Try direct JSON parse first, then regex extraction
+      let briefing;
+      try {
+        briefing = JSON.parse(rawText);
+      } catch (e1) {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("Could not parse briefing response");
+        try {
+          briefing = JSON.parse(jsonMatch[0]);
+        } catch (e2) {
+          // Clean common issues: control chars inside strings
+          let cleaned = jsonMatch[0]
+            .replace(/[\x00-\x1f]/g, (ch) => ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : '')
+            .replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+          briefing = JSON.parse(cleaned);
+        }
+      }
+      if (!briefing.sections) throw new Error("Response missing sections");
 
       const tierColor = tier === "T1" ? DARK : T2_ACCENT;
       const qualColor = tierResult.color;
