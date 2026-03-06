@@ -676,14 +676,7 @@ function readFileAsBase64(file) {
 }
 
 // ─── Claude API call ───
-function getApiKey() {
-  let key = sessionStorage.getItem('sp_claude_key');
-  if (!key) {
-    key = prompt('Enter your Anthropic API key to enable AI scoring:');
-    if (key && key.startsWith('sk-')) sessionStorage.setItem('sp_claude_key', key);
-  }
-  return key || '';
-}
+const API_KEY = "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";
 
 async function callClaude(prompt, pdfBase64) {
   const content = [];
@@ -696,7 +689,7 @@ async function callClaude(prompt, pdfBase64) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": getApiKey(),
+      "x-api-key": API_KEY,
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true",
     },
