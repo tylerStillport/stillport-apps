@@ -686,7 +686,7 @@ async function callClaude(prompt, pdfBase64) {
   const response = await fetch("/api/score", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 4000, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 4000, messages: [{ role: "user", content }] }),
   });
   if (!response.ok) { const err = await response.text(); throw new Error(`API ${response.status}: ${err.slice(0, 200)}`); }
   const data = await response.json();
@@ -1074,7 +1074,7 @@ Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
       const response = await fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 3000, messages: [{ role: "user", content: briefingPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 3000, messages: [{ role: "user", content: briefingPrompt }] }),
       });
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const data = await response.json();
