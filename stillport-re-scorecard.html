@@ -675,9 +675,7 @@ function readFileAsBase64(file) {
   });
 }
 
-// ─── Claude API call ───
-const API_KEY = "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";
-
+// ─── Claude API call (proxied through server) ───
 async function callClaude(prompt, pdfBase64) {
   const content = [];
   if (pdfBase64) {
@@ -685,14 +683,9 @@ async function callClaude(prompt, pdfBase64) {
   }
   content.push({ type: "text", text: prompt });
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("/api/score", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 4000, messages: [{ role: "user", content }] }),
   });
   if (!response.ok) { const err = await response.text(); throw new Error(`API ${response.status}: ${err.slice(0, 200)}`); }
@@ -1078,9 +1071,9 @@ Write a professional strategy briefing with these sections:
 Return ONLY a JSON object: { "sections": [ { "title": "string", "content": "string" } ] }
 Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/score", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": API_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 3000, messages: [{ role: "user", content: briefingPrompt }] }),
       });
       if (!response.ok) throw new Error(`API error: ${response.status}`);

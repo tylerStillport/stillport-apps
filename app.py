@@ -9,6 +9,7 @@ Routes:
   /outreach                 — OutreachFlow email campaign app
   /crm                      — Stillport Fundraise CRM
   /scorecard                — RE Scorecard (AI-powered deal scoring)
+  /api/score                — Anthropic API proxy (keeps key server-side)
   /track?tid=...&cid=...    — Tracking pixel endpoint
   /events?cids=...          — Open event data
   /health                   — Health check
@@ -20,6 +21,7 @@ from datetime import datetime
 import json
 import os
 import threading
+import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
@@ -88,6 +90,32 @@ def outreach():
 @app.route('/scorecard')
 def scorecard():
     return send_file(os.path.join(APP_DIR, 'stillport-re-scorecard.html'))
+
+
+# ===== ANTHROPIC API PROXY =====
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
+@app.route('/api/score', methods=['POST'])
+def api_score():
+    """Proxy endpoint for Anthropic API calls — keeps API key server-side."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'API key not configured on server'}), 500
+    try:
+        payload = request.get_json()
+        resp = http_requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+            },
+            json=payload,
+            timeout=120,
+        )
+        return Response(resp.content, status=resp.status_code,
+                        content_type=resp.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ===== TRACKING PIXEL SERVER =====
