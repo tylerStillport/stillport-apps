@@ -7,6 +7,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -960,7 +961,8 @@ window.StillportREScorecard = function StillportREScorecard() {
 
   // ─── Download Excel ───
   const downloadExcel = async () => {
-    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+    try {
+    if (typeof XLSX === "undefined") { alert("Excel library failed to load. Please refresh the page and try again."); return; }
     const wb = XLSX.utils.book_new();
     const summaryRows = [
       ["STILLPORT RE SELECTION SCORECARD"], [`Tier: ${config.label}`], [],
@@ -1022,6 +1024,7 @@ window.StillportREScorecard = function StillportREScorecard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
+    } catch (err) { alert(`Error downloading Excel: ${err.message}`); console.error("Excel download error:", err); }
   };
 
   // ─── Download PDF Strategy Briefing ───
