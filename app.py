@@ -110,7 +110,8 @@ def api_score():
         import traceback, sys
         raw_body = request.get_data()            # raw bytes — no JSON parse
         content_len = len(raw_body)
-        print(f"[api/score] Incoming request: {content_len:,} bytes", flush=True)
+        key_preview = ANTHROPIC_API_KEY[:20] + '...' if len(ANTHROPIC_API_KEY) > 20 else '(empty)'
+        print(f"[api/score] Incoming request: {content_len:,} bytes | key starts: {key_preview}", flush=True)
 
         resp = http_requests.post(
             'https://api.anthropic.com/v1/messages',
@@ -131,6 +132,10 @@ def api_score():
         del raw_body                              # free request memory early
 
         print(f"[api/score] Anthropic responded: {resp.status_code} ({len(response_body):,} bytes)", flush=True)
+        if resp.status_code >= 400:
+            # Log error responses so we can debug in Render logs
+            print(f"[api/score] ERROR body: {response_body[:2000]}", flush=True)
+            print(f"[api/score] Response headers: {dict(resp.headers)}", flush=True)
         return Response(response_body, status=resp.status_code,
                         content_type=resp.headers.get('Content-Type', 'application/json'))
     except Exception as e:
