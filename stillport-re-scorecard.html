@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stillport RE Scorecard</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #FAFAFA; min-height: 100vh; }
+
+  /* Login Overlay */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: linear-gradient(135deg, #1B2A4A 0%, #0D1B2A 100%);
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .login-overlay.hidden { display: none; }
+  .login-card {
+    background: #fff; border-radius: 12px; padding: 48px 40px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 420px; width: 90%;
+  }
+  .login-card h1 { font-family: Georgia, serif; color: #1B2A4A; font-size: 24px; margin-bottom: 4px; }
+  .login-card .subtitle { color: #B08D57; font-size: 14px; margin-bottom: 32px; font-family: Georgia, serif; }
+  .login-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 14px 24px; border-radius: 8px; border: 2px solid #1B2A4A;
+    background: #1B2A4A; color: #B08D57; font-size: 15px; font-weight: 600; cursor: pointer;
+    font-family: Georgia, serif; transition: all 0.2s;
+  }
+  .login-btn:hover { background: #243654; }
+  .login-btn:disabled { opacity: 0.6; cursor: wait; }
+  .login-error { color: #C62828; font-size: 13px; margin-top: 12px; display: none; }
+  .login-loading { color: #888; font-size: 13px; margin-top: 12px; display: none; }
+  .skip-btn {
+    background: none; border: none; color: #999; font-size: 12px;
+    cursor: pointer; margin-top: 16px; text-decoration: underline;
+  }
+
+  /* Top bar */
+  .topbar {
+    background: #1B2A4A; padding: 8px 20px; display: flex;
+    justify-content: space-between; align-items: center; font-size: 12px; color: rgba(255,255,255,0.6);
+  }
+  .topbar .user-info { display: flex; align-items: center; gap: 12px; }
+  .topbar .save-indicator { color: #B08D57; font-size: 11px; }
+  .topbar button {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+  .topbar button:hover { background: rgba(255,255,255,0.2); }
+</style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h1>RE Selection Scorecard</h1>
+    <div class="subtitle">Property-Level Screening & Evaluation</div>
+    <div id="fileProtocolWarning" style="display:none;background:#FDE8E8;border:2px solid #C62828;border-radius:8px;padding:16px;margin-bottom:16px;text-align:left">
+      <div style="font-weight:700;color:#C62828;margin-bottom:6px">Cannot sign in from file://</div>
+      <div style="font-size:13px;color:#333;line-height:1.5">
+        Microsoft SSO requires an HTTP server. Open Terminal and run:<br>
+        <code style="background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:12px">cd "path/to/APPS" && python3 serve.py</code><br>
+        Then open <strong>http://localhost:8000/stillport-re-scorecard.html</strong>
+      </div>
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="handleLogin()">
+      <svg width="20" height="20" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-loading" id="loginLoading">Signing in...</div>
+    <div class="login-error" id="loginError"></div>
+    <button class="skip-btn" onclick="skipLogin()">Use offline (no cloud save)</button>
+  </div>
+</div>
+
+<div id="root"></div>
+
+<script>
+// Detect file:// protocol
+if (window.location.protocol === 'file:') {
+  document.getElementById('fileProtocolWarning').style.display = 'block';
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('loginBtn').style.opacity = '0.4';
+}
+
+// ===== MSAL AUTH =====
+const cloudConfig = {
+  tenantId: '13dc13e3-f6f6-4c45-948d-baae80478dd4',
+  clientId: '17511f86-ad7d-40a2-9978-01a08df6934b',
+};
+
+let msalInstance = null;
+let currentUser = null;
+let isCloudMode = false;
+let msalToken = null;
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const SCORECARD_FOLDER = 'Stillport/RE Scorecards';
+
+function initMSAL() {
+  if (!cloudConfig.clientId || !cloudConfig.tenantId) return false;
+  try {
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: cloudConfig.clientId,
+        authority: `https://login.microsoftonline.com/${cloudConfig.tenantId}`,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false },
+    });
+    return true;
+  } catch (e) { console.error('MSAL init failed:', e); return false; }
+}
+
+async function handleLogin() {
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'block';
+  document.getElementById('loginBtn').disabled = true;
+
+  if (!initMSAL()) {
+    document.getElementById('loginError').textContent = 'SSO not configured.';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+    return;
+  }
+
+  try {
+    const loginResp = await msalInstance.loginPopup({
+      scopes: ['User.Read', 'Files.ReadWrite'],
+    });
+    currentUser = loginResp.account;
+    isCloudMode = true;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    renderApp();
+  } catch (err) {
+    console.error('Login failed:', err);
+    document.getElementById('loginError').textContent = err.message || 'Login failed. Please try again.';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginBtn').disabled = false;
+  }
+}
+
+function skipLogin() {
+  isCloudMode = false;
+  currentUser = null;
+  document.getElementById('loginOverlay').classList.add('hidden');
+  renderApp();
+}
+
+async function getToken() {
+  if (!msalInstance || !currentUser) return null;
+  try {
+    const resp = await msalInstance.acquireTokenSilent({
+      scopes: ['Files.ReadWrite'],
+      account: currentUser,
+    });
+    return resp.accessToken;
+  } catch (e) {
+    try {
+      const resp = await msalInstance.acquireTokenPopup({ scopes: ['Files.ReadWrite'] });
+      return resp.accessToken;
+    } catch (e2) { console.error('Token error:', e2); return null; }
+  }
+}
+
+// OneDrive helpers
+async function ensureFolder(token) {
+  const parts = SCORECARD_FOLDER.split('/');
+  let path = '';
+  for (const part of parts) {
+    path += '/' + part;
+    try {
+      await fetch(`${GRAPH_BASE}/me/drive/root:${path}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(r => { if (!r.ok) throw r; });
+    } catch {
+      await fetch(`${GRAPH_BASE}/me/drive/root:${path.substring(0, path.lastIndexOf('/'))}:/children`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: part, folder: {}, '@microsoft.graph.conflictBehavior': 'replace' })
+      });
+    }
+  }
+}
+
+async function saveScorecard(data, filename) {
+  const token = await getToken();
+  if (!token) return false;
+  try {
+    await ensureFolder(token);
+    const path = `/${SCORECARD_FOLDER}/${filename}.json`;
+    await fetch(`${GRAPH_BASE}/me/drive/root:${path}:/content`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return true;
+  } catch (e) { console.error('Save failed:', e); return false; }
+}
+
+async function listScorecards() {
+  const token = await getToken();
+  if (!token) return [];
+  try {
+    const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${SCORECARD_FOLDER}:/children?$select=name,lastModifiedDateTime,size&$orderby=lastModifiedDateTime desc`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.value || []).filter(f => f.name.endsWith('.json'));
+  } catch { return []; }
+}
+
+async function loadScorecard(filename) {
+  const token = await getToken();
+  if (!token) return null;
+  try {
+    const resp = await fetch(`${GRAPH_BASE}/me/drive/root:/${SCORECARD_FOLDER}/${filename}:/content`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch { return null; }
+}
+
+async function deleteScorecard(filename) {
+  const token = await getToken();
+  if (!token) return false;
+  try {
+    await fetch(`${GRAPH_BASE}/me/drive/root:/${SCORECARD_FOLDER}/${filename}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return true;
+  } catch { return false; }
+}
+
+function renderApp() {
+  // Expose globals for the React app
+  window.__CLOUD_MODE = isCloudMode;
+  window.__CURRENT_USER = currentUser;
+  window.__saveScorecard = saveScorecard;
+  window.__listScorecards = listScorecards;
+  window.__loadScorecard = loadScorecard;
+  window.__deleteScorecard = deleteScorecard;
+
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(React.createElement(window.StillportREScorecard));
+}
+</script>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ─── Brand Tokens ───
+const GOLD = "#B08D57";
+const DARK = "#1B2A4A";
+const T1_ACCENT = "#1B2A4A";
+const T2_ACCENT = "#4A6741";
+const LIGHT_GOLD = "#F5F0E0";
+const WARN_RED = "#FDE8E8";
+const RED = "#C62828";
+const GREEN = "#2E7D32";
+
+// ─── Market Lookup ───
+const MARKETS = [
+  { n: "SF - Pacific Heights / Marina, CA", c: 4.4, t: "T1" },
+  { n: "SF - Hayes Valley / Castro, CA", c: 4.4, t: "T1" },
+  { n: "Manhattan - Tribeca / SoHo, NY", c: 4.4, t: "T1" },
+  { n: "Manhattan - Upper West Side, NY", c: 4.4, t: "T1" },
+  { n: "Culver City / Mar Vista, CA", c: 4.35, t: "T1" },
+  { n: "Santa Monica / Venice, CA", c: 4.35, t: "T1" },
+  { n: "Little Italy / East Village, CA", c: 4.3, t: "T1" },
+  { n: "Pasadena / South Pasadena, CA", c: 4.3, t: "T1" },
+  { n: "Brooklyn - Williamsburg / DUMBO, NY", c: 4.3, t: "T1" },
+  { n: "West Hollywood / Melrose, CA", c: 4.25, t: "T1" },
+  { n: "Queen Anne / South Lake Union, WA", c: 4.25, t: "T1" },
+  { n: "Bellevue Downtown, WA", c: 4.15, t: "T1" },
+  { n: "Glendale / Eagle Rock, CA", c: 4.1, t: "T1" },
+  { n: "Mission Hills / Bankers Hill, CA", c: 4.1, t: "T1" },
+  { n: "Oakland - Temescal / Rockridge, CA", c: 4.1, t: "T1" },
+  { n: "Oakland - Lake Merritt / Grand Lake, CA", c: 4.1, t: "T1" },
+  { n: "Orange County - Newport Beach / Costa Mesa, CA", c: 4.05, t: "T1" },
+  { n: "Ballard / Fremont, WA", c: 4.05, t: "T1" },
+  { n: "Brooklyn - Park Slope / Prospect Heights, NY", c: 4.05, t: "T1" },
+  { n: "Capitol Hill / First Hill, WA", c: 4.0, t: "T1" },
+  { n: "North Park / Hillcrest, CA", c: 4.0, t: "T1" },
+  { n: "Studio City / Sherman Oaks, CA", c: 4.0, t: "T1" },
+  { n: "Mountain View / Sunnyvale, CA", c: 4.0, t: "T1" },
+  { n: "Palo Alto / Stanford, CA", c: 4.0, t: "T1" },
+  { n: "Hoboken / Jersey City waterfront, NJ", c: 4.0, t: "T1" },
+  { n: "West Seattle / Alki, WA", c: 3.95, t: "T1" },
+  { n: "Georgetown / Dupont Circle, DC", c: 3.95, t: "T1" },
+  { n: "Redwood City / San Carlos, CA", c: 3.9, t: "T1" },
+  { n: "Burlingame / San Mateo, CA", c: 3.9, t: "T1" },
+  { n: "Berkeley / North Oakland, CA", c: 3.9, t: "T1" },
+  { n: "San Jose-Sunnyvale-Santa Clara, CA", c: 3.9, t: "T1" },
+  { n: "Scottsdale - Old Town / South Scottsdale, AZ", c: 3.85, t: "T1" },
+  { n: "Columbia City / Beacon Hill, WA", c: 3.85, t: "T1" },
+  { n: "Inman Park / Old Fourth Ward, GA", c: 3.85, t: "T1" },
+  { n: "Wicker Park / Bucktown, IL", c: 3.85, t: "T1" },
+  { n: "Long Beach / Belmont Shore, CA", c: 3.8, t: "T1" },
+  { n: "Arlington - Clarendon / Ballston, VA", c: 3.8, t: "T1" },
+  { n: "Capitol Hill / Navy Yard, DC", c: 3.8, t: "T1" },
+  { n: "Uptown Dallas / Highland Park, TX", c: 3.75, t: "T1" },
+  { n: "Lincoln Park / Lakeview, IL", c: 3.75, t: "T1" },
+  { n: "Paradise Valley, AZ", c: 3.7, t: "T1" },
+  { n: "Montrose / River Oaks, TX", c: 3.7, t: "T1" },
+  { n: "La Jolla, CA", c: 3.65, t: "T1" },
+  { n: "Coronado / Point Loma, CA", c: 3.65, t: "T1" },
+  { n: "San Jose - Los Gatos / Saratoga, CA", c: 3.65, t: "T1" },
+  { n: "Kirkland / Totem Lake, WA", c: 3.65, t: "T1" },
+  { n: "Silver Lake / Los Feliz, CA", c: 3.65, t: "T1" },
+  { n: "Melrose Hill, CA", c: 3.65, t: "T1" },
+  { n: "Coconut Grove / Coral Gables, FL", c: 3.65, t: "T1" },
+  { n: "Alexandria Old Town, VA", c: 3.6, t: "T1" },
+  { n: "Westchester - White Plains / Scarsdale, NY", c: 3.6, t: "T1" },
+  { n: "Chandler / Ocotillo, AZ", c: 3.55, t: "T1" },
+  { n: "Tempe - Mill Ave / ASU area, AZ", c: 3.55, t: "T1" },
+  { n: "Pacific Beach / Mission Beach, CA", c: 3.55, t: "T1" },
+  { n: "Huntington Beach / Seal Beach, CA", c: 3.55, t: "T1" },
+  { n: "Pearl District / NW Portland, OR", c: 3.55, t: "T1" },
+  { n: "Decatur / Emory area, GA", c: 3.55, t: "T1" },
+  { n: "Camelback Corridor / Biltmore Fashion Park, AZ", c: 3.5, t: "T1" },
+  { n: "Sacramento-Roseville-Arden-Arcade, CA", c: 3.5, t: "T1" },
+  { n: "Naperville, IL", c: 3.5, t: "T1" },
+  { n: "Del Mar / Solana Beach, CA", c: 3.45, t: "T1" },
+  { n: "Mercer Island, WA", c: 3.45, t: "T1" },
+  { n: "Redmond, WA", c: 3.45, t: "T1" },
+  { n: "Encinitas / Leucadia, CA", c: 3.45, t: "T1" },
+  { n: "West Linn / Tualatin, OR", c: 3.45, t: "T1" },
+  { n: "Bethesda / Chevy Chase, MD", c: 3.45, t: "T1" },
+  { n: "North Shore - Evanston / Wilmette, IL", c: 3.45, t: "T1" },
+  { n: "West Loop / Fulton Market, IL", c: 3.45, t: "T1" },
+  { n: "Gilbert / Queen Creek, AZ", c: 3.4, t: "T2" },
+  { n: "Monterey Peninsula, CA", c: 3.4, t: "T2" },
+  { n: "Mesa - Downtown / Riverview, AZ", c: 3.4, t: "T2" },
+  { n: "Ocean Beach / Liberty Station, CA", c: 3.4, t: "T2" },
+  { n: "Marin County - Mill Valley / Sausalito, CA", c: 3.4, t: "T2" },
+  { n: "Walnut Creek / Lafayette, CA", c: 3.4, t: "T2" },
+  { n: "Lake Oswego, OR", c: 3.4, t: "T2" },
+  { n: "Laguna Beach / Dana Point, CA", c: 3.4, t: "T2" },
+  { n: "Carlsbad, CA", c: 3.4, t: "T2" },
+  { n: "Woodinville / Bothell, WA", c: 3.4, t: "T2" },
+  { n: "Tysons Corner / McLean, VA", c: 3.4, t: "T2" },
+  { n: "Minneapolis-St. Paul-Bloomington, MN", c: 3.4, t: "T2" },
+  { n: "North Scottsdale / Grayhawk, AZ", c: 3.35, t: "T2" },
+  { n: "Riverside-San Bernardino-Ontario, CA", c: 3.35, t: "T2" },
+  { n: "Beaverton / Cedar Hills, OR", c: 3.35, t: "T2" },
+  { n: "Denver-Aurora-Lakewood, CO", c: 3.35, t: "T2" },
+  { n: "Alberta Arts / NE Portland, OR", c: 3.3, t: "T2" },
+  { n: "Santa Rosa-Petaluma, CA", c: 3.3, t: "T2" },
+  { n: "Tacoma - Stadium District / 6th Ave, WA", c: 3.3, t: "T2" },
+  { n: "Fremont / Niles, CA", c: 3.3, t: "T2" },
+  { n: "Irvine / Tustin, CA", c: 3.3, t: "T2" },
+  { n: "Sellwood / Hawthorne, OR", c: 3.3, t: "T2" },
+  { n: "Bethesda Row / Pike & Rose, MD", c: 3.3, t: "T2" },
+  { n: "Oak Park / Forest Park, IL", c: 3.3, t: "T2" },
+  { n: "Midtown / Piedmont Park, GA", c: 3.3, t: "T2" },
+  { n: "Deep Ellum / Design District, TX", c: 3.25, t: "T2" },
+  { n: "Peoria / Glendale (West Valley), AZ", c: 3.25, t: "T2" },
+  { n: "Renton / Newcastle, WA", c: 3.25, t: "T2" },
+  { n: "Federal Way / Auburn, WA", c: 3.25, t: "T2" },
+  { n: "Pleasanton / Dublin, CA", c: 3.25, t: "T2" },
+  { n: "Claremont / Glendora, CA", c: 3.25, t: "T2" },
+  { n: "Bend, OR", c: 3.25, t: "T2" },
+  { n: "Schaumburg / Arlington Heights, IL", c: 3.25, t: "T2" },
+  { n: "The Heights / EaDo, TX", c: 3.2, t: "T2" },
+  { n: "SanTan Village area / South Gilbert, AZ", c: 3.2, t: "T2" },
+  { n: "Issaquah / Sammamish, WA", c: 3.2, t: "T2" },
+  { n: "Olympia / Lacey, WA", c: 3.2, t: "T2" },
+  { n: "Concord / Pleasant Hill, CA", c: 3.2, t: "T2" },
+  { n: "Hillsboro / Orenco Station, OR", c: 3.2, t: "T2" },
+  { n: "Silver Spring / Takoma Park, MD", c: 3.2, t: "T2" },
+  { n: "Sugar Land / Missouri City, TX", c: 3.15, t: "T2" },
+  { n: "Surprise / Sun City West, AZ", c: 3.15, t: "T2" },
+  { n: "Everett / Marysville, WA", c: 3.15, t: "T2" },
+  { n: "Hayward / Union City, CA", c: 3.15, t: "T2" },
+  { n: "Salem / Keizer, OR", c: 3.15, t: "T2" },
+  { n: "Rockville / Gaithersburg, MD", c: 3.15, t: "T2" },
+  { n: "Woodlands / Spring, TX", c: 3.1, t: "T2" },
+  { n: "Goodyear / Avondale, AZ", c: 3.1, t: "T2" },
+  { n: "Bellingham, WA", c: 3.1, t: "T2" },
+  { n: "Stockton-Lodi, CA", c: 3.1, t: "T2" },
+  { n: "Eugene-Springfield, OR", c: 3.1, t: "T2" },
+  { n: "Manassas / Gainesville, VA", c: 3.1, t: "T2" },
+  { n: "Katy / Cinco Ranch, TX", c: 3.05, t: "T2" },
+  { n: "Buckeye / Verrado, AZ", c: 3.05, t: "T2" },
+  { n: "Visalia-Porterville-Hanford, CA", c: 3.05, t: "T2" },
+  { n: "Modesto-Merced, CA", c: 3.05, t: "T2" },
+  { n: "Roseburg / Grants Pass, OR", c: 3.05, t: "T2" },
+  { n: "Hagerstown / Frederick, MD", c: 3.05, t: "T2" },
+  { n: "Pearland / League City, TX", c: 3.0, t: "T2" },
+  { n: "Queen Creek / San Tan Valley, AZ", c: 3.0, t: "T2" },
+  { n: "Kennewick-Richland, WA", c: 3.0, t: "T2" },
+  { n: "Bakersfield, CA", c: 3.0, t: "T2" },
+  { n: "Medford-Ashland, OR", c: 3.0, t: "T2" },
+  { n: "Salisbury / Ocean City, MD", c: 3.0, t: "T2" },
+  { n: "Joliet / Plainfield, IL", c: 3.0, t: "T2" },
+  { n: "Marietta / Roswell, GA", c: 3.0, t: "T2" },
+  { n: "Fort Worth - Southlake / Colleyville, TX", c: 2.95, t: "T2" },
+  { n: "Maricopa / Casa Grande, AZ", c: 2.95, t: "T2" },
+  { n: "Yakima, WA", c: 2.95, t: "T2" },
+  { n: "Fresno-Madera-Hanford, CA", c: 2.95, t: "T2" },
+  { n: "Columbia / Ellicott City, MD", c: 2.95, t: "T2" },
+  { n: "Elgin / St. Charles, IL", c: 2.95, t: "T2" },
+  { n: "Sandy Springs / Dunwoody, GA", c: 2.95, t: "T2" },
+  { n: "Plano / Frisco, TX", c: 2.9, t: "T2" },
+  { n: "Flagstaff / Sedona, AZ", c: 2.9, t: "T2" },
+  { n: "Spokane-Spokane Valley, WA", c: 2.9, t: "T2" },
+  { n: "Vallejo-Fairfield-Napa, CA", c: 2.9, t: "T2" },
+  { n: "Annapolis / Bowie, MD", c: 2.9, t: "T2" },
+  { n: "Orland Park / Tinley Park, IL", c: 2.9, t: "T2" },
+  { n: "Alpharetta / Johns Creek, GA", c: 2.9, t: "T2" },
+  { n: "Cypress / Tomball, TX", c: 2.85, t: "T2" },
+  { n: "Prescott / Prescott Valley, AZ", c: 2.85, t: "T2" },
+  { n: "Olympia / Tumwater, WA", c: 2.85, t: "T2" },
+  { n: "El Centro / Calexico, CA", c: 2.85, t: "T2" },
+  { n: "Corvallis / Albany, OR", c: 2.85, t: "T2" },
+  { n: "Towson / Hunt Valley, MD", c: 2.85, t: "T2" },
+  { n: "DeKalb / Sycamore, IL", c: 2.85, t: "T2" },
+  { n: "Lawrenceville / Snellville, GA", c: 2.85, t: "T2" },
+  { n: "Richmond / Rosenberg, TX", c: 2.8, t: "T2" },
+  { n: "Lake Havasu City / Bullhead City, AZ", c: 2.8, t: "T2" },
+  { n: "Wenatchee / Moses Lake, WA", c: 2.8, t: "T2" },
+  { n: "Chico-Red Bluff, CA", c: 2.8, t: "T2" },
+  { n: "The Dalles / Hood River, OR", c: 2.8, t: "T2" },
+  { n: "Cumberland / Frostburg, MD", c: 2.8, t: "T2" },
+  { n: "Kankakee / Bourbonnais, IL", c: 2.8, t: "T2" },
+  { n: "Virginia Beach-Norfolk-Newport News, VA", c: 2.8, t: "T2" },
+];
+
+// ─── Document Types ───
+const DOC_TYPES = [
+  { id: "brochure", label: "Brochure / Teaser", icon: "\u25A4", color: GOLD,
+    desc: "Property listing, offering memorandum, or marketing package",
+    targets: "Property info, price, SF, zoning, parking, traffic, neighborhood" },
+  { id: "asbuilt", label: "As-Built Plans", icon: "\u25A6", color: "#5C6BC0",
+    desc: "Existing building construction documents or as-built drawings",
+    targets: "Electrical panel, water service, ceiling heights, columns, structural" },
+  { id: "floorplan", label: "Floor Plans", icon: "\u25A7", color: "#26A69A",
+    desc: "Architectural floor plans, space plans, or site plans",
+    targets: "Building level config, ceiling heights, column spacing, total SF" },
+  { id: "sitesurvey", label: "Site Survey", icon: "\u25EB", color: "#8D6E63",
+    desc: "ALTA survey, topographic survey, or site assessment",
+    targets: "Parking, utilities at street, setbacks, flood zone, environmental" },
+  { id: "environmental", label: "Phase I ESA", icon: "\u25EC", color: "#EF5350",
+    desc: "Phase I Environmental Site Assessment report",
+    targets: "Environmental / hazmat risk score, RECs, USTs, contamination" },
+  { id: "other", label: "Other Document", icon: "\u25A3", color: "#78909C",
+    desc: "Appraisal, inspection report, zoning letter, or other",
+    targets: "Any relevant criteria the document addresses" },
+];
+
+// ─── Tier Configuration ───
+const TIER_CONFIG = {
+  T1: { label: "T1 Flagship", accent: T1_ACCENT, prime: 4.25, strong: 3.5, viable: 2.75 },
+  T2: { label: "T2 Core", accent: T2_ACCENT, prime: 4.0, strong: 3.25, viable: 2.5 },
+};
+
+// ─── SF Range Gates ───
+const SF_RANGES = {
+  T1: null,
+  T2: [
+    { composite: 3.2, min: 6500, max: 8000, label: "6,500\u20138,000 SF (composite \u2265 3.20)" },
+    { composite: 2.8, min: 5500, max: 7000, label: "5,500\u20137,000 SF (composite \u2265 2.80)" },
+  ],
+};
+
+// ─── Dimension Definitions ───
+const DIMENSIONS = {
+  T1: [
+    { name: "Micro-Demographics", weight: 0.2, criteria: [
+      { id: "hhi", label: "Trade-area median HHI", guide: "$120K+=5, $100-120K=4, $80-100K=3, $60-80K=2, <$60K=1" },
+      { id: "edu", label: "College education rate", guide: "55%+=5, 45-55%=4, 35-45%=3, 25-35%=2, <25%=1" },
+      { id: "lifestyle", label: "Lifestyle alignment", guide: "Wellness/fitness spending indicators" },
+      { id: "daypop", label: "Daytime population density", guide: "Office workers, visitors" },
+      { id: "growth", label: "Residential growth trend", guide: "Population change 5-yr" },
+    ]},
+    { name: "Accessibility & Visibility", weight: 0.12, criteria: [
+      { id: "frontage", label: "Street frontage / signage", guide: "Visibility from main road" },
+      { id: "traffic", label: "Vehicle traffic count", guide: "30K+ AADT=5, 20-30K=4, 12-20K=3, 5-12K=2, <5K=1" },
+      { id: "parking", label: "Parking availability", guide: "25+ ded.=5, 15-25=4, 8-15=3, <8=2, none=1" },
+      { id: "transit", label: "Transit access", guide: "Walk/bike/transit score" },
+      { id: "drivetime", label: "Drive-time from target areas", guide: "5-min=5, 10-min=4" },
+    ]},
+    { name: "Co-Tenancy & Ecosystem", weight: 0.12, criteria: [
+      { id: "retail", label: "Adjacent retail/restaurant quality", guide: "Premium dining & boutique = 5" },
+      { id: "wellness", label: "Complementary wellness neighbors", guide: "Equinox-tier = 5" },
+      { id: "neighborhood", label: "Neighborhood character", guide: "Nationally recognized district = 5" },
+      { id: "evening", label: "Evening/weekend activity", guide: "Active nightlife and weekend scene" },
+      { id: "incompatible", label: "Absence of incompatible uses", guide: "No negative neighbors" },
+    ]},
+    { name: "Utilities & Infrastructure", weight: 0.15, criteria: [
+      { id: "electrical", label: "Electrical service capacity", guide: "600A+ 3-phase: Yes=5, No=1", binary: true },
+      { id: "water", label: "Water service size", guide: '2"+ domestic: Yes=5, No=1', binary: true },
+      { id: "gas", label: "Natural gas capacity", guide: "Ref: 219 MBH per 1,000 SF" },
+      { id: "sewer", label: "Sewer/drain adequacy", guide: "Floor drains, grease trap capacity" },
+      { id: "enviro", label: "Environmental / hazmat risk", guide: "Clean Phase I required; any REC = max 3" },
+    ]},
+    { name: "Spatial & Structural", weight: 0.15, criteria: [
+      { id: "level", label: "Building level config", guide: "Single-level=5, partial basement=3, basement-dependent=1" },
+      { id: "ceiling", label: "Ceiling height (spa zones)", guide: "12'+=5, 10'-12'=4, 9'-10'=3, 8'-9'=2, <8'=1" },
+      { id: "columns", label: "Column spacing / open plan", guide: "50'+=5, 40'=4, 30'=3, 20'=2, <20'=1" },
+      { id: "roofload", label: "Roof load capacity", guide: "Heavy mech designed=5, standard=4, marginal=3" },
+      { id: "structure", label: "Structural soundness", guide: "Foundation, framing, seismic rating" },
+    ]},
+    { name: "Zoning & Permitting", weight: 0.13, criteria: [
+      { id: "zoning", label: "Zoning compatibility", guide: "By right=5, conditional=3, variance=1" },
+      { id: "permit", label: "Permit timeline", guide: "<4mo=5, 4-6=4, 6-9=3, 9-12=2, >12mo=1" },
+      { id: "community", label: "Community sensitivity", guide: "Opposition risk assessment" },
+      { id: "historic", label: "Historic overlay / design review", guide: "Restrictions on changes" },
+      { id: "health", label: "Health dept / ISPSC compliance", guide: "Established pathway = 5" },
+    ]},
+    { name: "Acquisition Economics", weight: 0.13, criteria: [
+      { id: "pricesf", label: "Price per SF vs. market", guide: "25%+ below=5, 15-25%=4, at market=3, above=2-1" },
+      { id: "deferred", label: "Deferred maintenance", guide: "Minimal=5, <$50K=4, $50-150K=3, $150-300K=2, >$300K=1" },
+      { id: "caprate", label: "Cap rate / return potential", guide: "Investment return analysis" },
+      { id: "totalcost", label: "Total cost vs. market budget", guide: "Well within=5, at ceiling=3, 25%+ over=1" },
+    ]},
+  ],
+  T2: [
+    { name: "Micro-Demographics", weight: 0.2, criteria: [
+      { id: "hhi", label: "Trade-area median HHI", guide: "$100K+=5, $80-100K=4, $60-80K=3, $45-60K=2, <$45K=1" },
+      { id: "edu", label: "College education rate", guide: "50%+=5, 40-50%=4, 30-40%=3, 20-30%=2, <20%=1" },
+      { id: "lifestyle", label: "Lifestyle alignment", guide: "Wellness/fitness spending indicators" },
+      { id: "daypop", label: "Daytime population density", guide: "Office workers, visitors" },
+      { id: "growth", label: "Residential growth trend", guide: "Population change 5-yr" },
+    ]},
+    { name: "Accessibility & Visibility", weight: 0.12, criteria: [
+      { id: "frontage", label: "Street frontage / signage", guide: "Visibility from main road" },
+      { id: "traffic", label: "Vehicle traffic count", guide: "25K+ AADT=5, 15-25K=4, 8-15K=3, 3-8K=2, <3K=1" },
+      { id: "parking", label: "Parking availability", guide: "20+ ded.=5, 12-20=4, 6-12=3, <6=2, none=1" },
+      { id: "transit", label: "Transit access", guide: "Walk/bike/transit score" },
+      { id: "drivetime", label: "Drive-time from target areas", guide: "5-min=5, 10-min=4, 15-min=3" },
+    ]},
+    { name: "Co-Tenancy & Ecosystem", weight: 0.12, criteria: [
+      { id: "retail", label: "Adjacent retail/restaurant quality", guide: "Good local dining & retail = 5" },
+      { id: "wellness", label: "Complementary wellness neighbors", guide: "Quality gym/yoga = 5" },
+      { id: "neighborhood", label: "Neighborhood character", guide: "Strong identity & walkability = 5" },
+      { id: "evening", label: "Evening/weekend activity", guide: "Consistent foot traffic" },
+      { id: "incompatible", label: "Absence of incompatible uses", guide: "No negative neighbors" },
+    ]},
+    { name: "Utilities & Infrastructure", weight: 0.15, criteria: [
+      { id: "electrical", label: "Electrical service capacity", guide: "400A+ 3-phase: Yes=5, No=1", binary: true },
+      { id: "water", label: "Water service size", guide: '1.5"+ domestic: Yes=5, No=1', binary: true },
+      { id: "gas", label: "Natural gas capacity", guide: "Ref: 180 MBH per 1,000 SF" },
+      { id: "sewer", label: "Sewer/drain adequacy", guide: "Floor drains, grease trap capacity" },
+      { id: "enviro", label: "Environmental / hazmat risk", guide: "Clean Phase I required; any REC = max 3" },
+    ]},
+    { name: "Spatial & Structural", weight: 0.15, criteria: [
+      { id: "level", label: "Building level config", guide: "Single-level=5, partial basement=3, basement-dependent=1" },
+      { id: "ceiling", label: "Ceiling height (spa zones)", guide: "11'+=5, 9.5'-11'=4, 8.5'-9.5'=3, 8'-8.5'=2, <8'=1" },
+      { id: "columns", label: "Column spacing / open plan", guide: "40'+=5, 30'=4, 25'=3, 20'=2, <20'=1" },
+      { id: "roofload", label: "Roof load capacity", guide: "Heavy mech designed=5, standard=4, marginal=3" },
+      { id: "structure", label: "Structural soundness", guide: "Foundation, framing condition" },
+    ]},
+    { name: "Zoning & Permitting", weight: 0.13, criteria: [
+      { id: "zoning", label: "Zoning compatibility", guide: "By right=5, conditional=3, variance=1" },
+      { id: "permit", label: "Permit timeline", guide: "<3mo=5, 3-5=4, 5-7=3, 7-10=2, >10mo=1" },
+      { id: "community", label: "Community sensitivity", guide: "Opposition risk assessment" },
+      { id: "historic", label: "Historic overlay / design review", guide: "Restrictions on changes" },
+      { id: "health", label: "Health dept / ISPSC compliance", guide: "Established pathway = 5" },
+    ]},
+    { name: "Acquisition Economics", weight: 0.13, criteria: [
+      { id: "pricesf", label: "Price per SF vs. market", guide: "25%+ below=5, 15-25%=4, at market=3, above=2-1" },
+      { id: "deferred", label: "Deferred maintenance", guide: "Minimal=5, <$40K=4, $40-120K=3, $120-250K=2, >$250K=1" },
+      { id: "caprate", label: "Cap rate / return potential", guide: "Investment return analysis" },
+      { id: "totalcost", label: "Total cost vs. market budget", guide: "Well within=5, at ceiling=3, 25%+ over=1" },
+    ]},
+  ],
+};
+
+// ─── Build AI prompt ───
+function buildPrompt(docType, text, tier) {
+  const dimensions = DIMENSIONS[tier];
+  const allCriteria = dimensions.flatMap((d) => d.criteria.map((c) => `${c.id}: ${c.label} (${c.guide})${c.binary ? " [BINARY: Yes=5, No=1]" : ""}`));
+  const criterionIds = dimensions.flatMap((d) => d.criteria.map((c) => c.id)).join(", ");
+
+  const typeContexts = {
+    brochure: `You are analyzing a COMMERCIAL REAL ESTATE BROCHURE or OFFERING MEMORANDUM for a premium bathhouse acquisition.
+This document likely contains: property address, asking price, total SF, year built, price/SF, zoning, parking count, traffic counts, tenant mix, neighborhood description, and property photos/renderings.
+FOCUS ON: Property info extraction, Micro-Demographics, Accessibility & Visibility, Co-Tenancy & Ecosystem, Acquisition Economics, and Zoning.`,
+    asbuilt: `You are analyzing AS-BUILT CONSTRUCTION DOCUMENTS or DRAWINGS for a property being evaluated for premium bathhouse conversion.
+This document likely contains: electrical panel schedules, mechanical schedules, plumbing riser diagrams, structural details, ceiling heights, column grids, and building systems specifications.
+FOCUS ON: Utilities & Infrastructure (especially electrical amperage, water service size, gas service), Spatial & Structural (ceiling heights, column spacing, roof load, building levels, structural condition).
+KEY THRESHOLDS: 600A+ 3-phase electrical = pass, 2"+ water service = pass. Extract actual values when visible.`,
+    floorplan: `You are analyzing ARCHITECTURAL FLOOR PLANS or SPACE PLANS for a property being evaluated for premium bathhouse conversion.
+This document likely contains: room dimensions, ceiling heights, column locations and spacing, building footprint SF, level configuration, entry/exit points, and overall building layout.
+FOCUS ON: Spatial & Structural (building level config \u2014 single-level preferred, ceiling heights, column spacing/open plan), and total SF verification.`,
+    sitesurvey: `You are analyzing a SITE SURVEY (ALTA, topographic, or similar) for a property being evaluated for premium bathhouse acquisition.
+This document likely contains: property boundaries, easements, setbacks, parking counts, utility connection points at street (water, sewer, gas, electrical), flood zone designation, topography, and site access.
+FOCUS ON: Accessibility & Visibility (parking, site access), Utilities & Infrastructure (utility availability at site), Environmental risk (flood zone), and any easements that could affect use.`,
+    environmental: `You are analyzing a PHASE I ENVIRONMENTAL SITE ASSESSMENT (ESA) for a property being evaluated for premium bathhouse acquisition.
+This document likely contains: site history, recognized environmental conditions (RECs), historical RECs, de minimis conditions, underground storage tanks (USTs), contamination findings, and recommendations.
+FOCUS ON: Environmental / hazmat risk (enviro criterion). KEY RULE: Clean Phase I = score 5. Any REC = max score 3. Multiple RECs or active contamination = 1-2.`,
+    other: `You are analyzing a document related to a property being evaluated for premium bathhouse acquisition.
+Extract any property information and score any criteria where the document provides clear evidence. Be conservative.`,
+  };
+
+  return `${typeContexts[docType]}
+
+TIER: ${TIER_CONFIG[tier].label} (${tier})
+
+PROPERTY INFO FIELDS (extract if available \u2014 leave null if not found):
+- Property name/address
+- Total SF
+- Year built
+- Asking price
+- Price per SF
+- Building type
+- Zoning designation
+
+ALL SCORING CRITERIA (score 1-5 based on document evidence, or null if not addressed):
+${allCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
+
+RULES:
+- For BINARY criteria (electrical, water): exactly 5 if meets threshold, exactly 1 if not, null if unknown
+- Be conservative \u2014 only score criteria where this specific document type provides clear evidence
+- Return null for criteria this document type wouldn't normally address
+- Include reasoning for every score
+
+DOCUMENT TEXT:
+${text.slice(0, 12000)}
+
+Return ONLY valid JSON:
+{
+  "propertyInfo": { "name": "string or null", "totalSF": "string or null", "yearBuilt": "string or null", "askingPrice": "string or null", "priceSF": "string or null", "buildingType": "string or null", "zoning": "string or null" },
+  "scores": { "criterionId": { "score": 1-5, "reasoning": "brief explanation" } },
+  "notes": "key observations from this document"
+}
+
+Use these criterion IDs: ${criterionIds}`;
+}
+
+// ─── Address-to-Market matcher ───
+function matchAddressToMarket(address) {
+  if (!address || address.length < 5) return null;
+  const addr = address.toLowerCase().replace(/[,.\-]/g, " ").replace(/\s+/g, " ");
+  const stateMatch = address.match(/\b([A-Z]{2})\b\s*\d{0,5}\s*$/);
+  const addrState = stateMatch ? stateMatch[1] : null;
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const m of MARKETS) {
+    const parts = m.n.split(",");
+    const marketState = parts[parts.length - 1].trim();
+    const marketTokens = parts[0].toLowerCase().replace(/[/\-()]/g, " ").replace(/\s+/g, " ").trim().split(" ").filter((t) => t.length > 2);
+
+    let score = 0;
+    if (addrState && marketState !== addrState) continue;
+    for (const token of marketTokens) {
+      if (addr.includes(token)) score += token.length;
+    }
+    if (score > bestScore) { bestScore = score; bestMatch = m; }
+  }
+  return bestScore >= 4 ? bestMatch : null;
+}
+
+// ─── Read file as base64 ───
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ─── Claude API call ───
+function getApiKey() {
+  let key = sessionStorage.getItem('sp_claude_key');
+  if (!key) {
+    key = prompt('Enter your Anthropic API key to enable AI scoring:');
+    if (key && key.startsWith('sk-')) sessionStorage.setItem('sp_claude_key', key);
+  }
+  return key || '';
+}
+
+async function callClaude(prompt, pdfBase64) {
+  const content = [];
+  if (pdfBase64) {
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } });
+  }
+  content.push({ type: "text", text: prompt });
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": getApiKey(),
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 4000, messages: [{ role: "user", content }] }),
+  });
+  if (!response.ok) { const err = await response.text(); throw new Error(`API ${response.status}: ${err.slice(0, 200)}`); }
+  const data = await response.json();
+  const jsonMatch = data.content[0].text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Could not parse AI response");
+  return JSON.parse(jsonMatch[0]);
+}
+
+// ─── Qualification tier label ───
+function getTierLabel(score, config) {
+  if (!score || isNaN(score)) return { label: "\u2014", color: "#999" };
+  if (score >= config.prime) return { label: "PRIME", color: GREEN };
+  if (score >= config.strong) return { label: "STRONG", color: "#4CAF50" };
+  if (score >= config.viable) return { label: "VIABLE", color: "#FF9800" };
+  return { label: "PASS", color: RED };
+}
+
+// ─── Score Input Component ───
+function ScoreInput({ value, onChange, binary, source }) {
+  const sourceTag = source ? (
+    <span title={`Source: ${source.docName}\n${source.reasoning}`}
+      style={{ fontSize: 10, color: source.color, fontWeight: 600, marginLeft: 4, cursor: "help",
+        background: `${source.color}18`, padding: "1px 5px", borderRadius: 3 }}>
+      {source.icon}
+    </span>
+  ) : null;
+
+  if (binary) {
+    return (
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <button onClick={() => onChange(5)} style={{
+          padding: "4px 12px", borderRadius: 4,
+          border: `2px solid ${value === 5 ? GREEN : "#ddd"}`,
+          background: value === 5 ? "#E8F5E9" : "#fff",
+          color: value === 5 ? GREEN : "#999",
+          fontWeight: value === 5 ? 700 : 400, cursor: "pointer", fontSize: 13 }}>
+          Yes (5)
+        </button>
+        <button onClick={() => onChange(1)} style={{
+          padding: "4px 12px", borderRadius: 4,
+          border: `2px solid ${value === 1 ? RED : "#ddd"}`,
+          background: value === 1 ? WARN_RED : "#fff",
+          color: value === 1 ? RED : "#999",
+          fontWeight: value === 1 ? 700 : 400, cursor: "pointer", fontSize: 13 }}>
+          No (1)
+        </button>
+        {sourceTag}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} onClick={() => onChange(n)} style={{
+          width: 32, height: 32, borderRadius: 4,
+          border: `2px solid ${value === n ? DARK : "#ddd"}`,
+          background: value === n ? DARK : "#fff",
+          color: value === n ? GOLD : "#666",
+          fontWeight: value === n ? 700 : 400, cursor: "pointer", fontSize: 14 }}>
+          {n}
+        </button>
+      ))}
+      {sourceTag}
+    </div>
+  );
+}
+
+// ─── Main App ───
+window.StillportREScorecard = function StillportREScorecard() {
+  const [tier, setTier] = useState("T1");
+  const [scores, setScores] = useState({});
+  const [scoreSources, setScoreSources] = useState({});
+  const [propertyInfo, setPropertyInfo] = useState({
+    name: "", market: "", marketComposite: "", buildingType: "",
+    totalSF: "", yearBuilt: "", askingPrice: "", priceSF: "",
+    dateEvaluated: new Date().toISOString().split("T")[0], evaluator: "",
+  });
+  const [sfGateResult, setSfGateResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadedDocs, setUploadedDocs] = useState([]);
+  const [selectedDocType, setSelectedDocType] = useState("brochure");
+  const [notes, setNotes] = useState("");
+  const [expandedDim, setExpandedDim] = useState(null);
+  const [showDocPanel, setShowDocPanel] = useState(false);
+  const [marketSearch, setMarketSearch] = useState("");
+  const [showMarketDropdown, setShowMarketDropdown] = useState(false);
+  const [marketManuallySet, setMarketManuallySet] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [savedFiles, setSavedFiles] = useState([]);
+  const [showLoadPanel, setShowLoadPanel] = useState(false);
+  const fileRef = useRef(null);
+
+  const cloudMode = window.__CLOUD_MODE;
+  const user = window.__CURRENT_USER;
+
+  // Close market dropdown when clicking outside
+  useEffect(() => {
+    const handleClick = () => setShowMarketDropdown(false);
+    if (showMarketDropdown) document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [showMarketDropdown]);
+
+  // Auto-match address to market
+  useEffect(() => {
+    if (!propertyInfo.name || propertyInfo.name.length < 8) return;
+    if (marketManuallySet) return;
+    const timer = setTimeout(() => {
+      const match = matchAddressToMarket(propertyInfo.name);
+      if (match) {
+        setMarketSearch(match.n);
+        setPropertyInfo((prev) => ({ ...prev, market: match.n, marketComposite: String(match.c) }));
+        if (match.t !== tier) {
+          setTier(match.t);
+          setScores({});
+          setScoreSources({});
+          setUploadedDocs([]);
+        }
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [propertyInfo.name]);
+
+  const config = TIER_CONFIG[tier];
+  const dimensions = DIMENSIONS[tier];
+
+  // SF gate (T2 only)
+  useEffect(() => {
+    const ranges = SF_RANGES[tier];
+    if (!ranges) { setSfGateResult(null); return; }
+    const sf = parseFloat(propertyInfo.totalSF);
+    const composite = parseFloat(propertyInfo.marketComposite);
+    if (!sf || !composite) { setSfGateResult(null); return; }
+    let matched = null;
+    for (const r of ranges) { if (composite >= r.composite) { matched = r; break; } }
+    if (!matched) setSfGateResult({ pass: false, reason: "Market composite too low for any SF range" });
+    else if (sf >= matched.min && sf <= matched.max) setSfGateResult({ pass: true, reason: `${sf.toLocaleString()} SF within ${matched.label}` });
+    else setSfGateResult({ pass: false, reason: `${sf.toLocaleString()} SF outside ${matched.label}` });
+  }, [propertyInfo.totalSF, propertyInfo.marketComposite, tier]);
+
+  // Scoring calculations
+  const dimAverages = dimensions.map((dim) => {
+    const vals = dim.criteria.map((c) => scores[c.id]).filter((v) => v != null && !isNaN(v));
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  });
+  const weightedComponents = dimAverages.map((avg, i) => avg != null ? avg * dimensions[i].weight : null);
+  const scoredDimCount = weightedComponents.filter((v) => v != null).length;
+  let compositeScore = null;
+  if (scoredDimCount > 0) {
+    const activeWeight = weightedComponents.reduce((sum, v, i) => sum + (v != null ? dimensions[i].weight : 0), 0);
+    compositeScore = weightedComponents.filter((v) => v != null).reduce((a, b) => a + b, 0) / activeWeight;
+  }
+  const allDimsScored = scoredDimCount === dimensions.length;
+  const tierResult = getTierLabel(compositeScore, config);
+  const scoredCount = Object.values(scores).filter((v) => v != null).length;
+  const totalCriteria = dimensions.reduce((sum, d) => sum + d.criteria.length, 0);
+
+  const handleScore = (id, val) => {
+    setScores((prev) => ({ ...prev, [id]: val }));
+    setScoreSources((prev) => { const n = { ...prev }; delete n[id]; return n; });
+  };
+  const handleInfo = (key, val) => setPropertyInfo((prev) => ({ ...prev, [key]: val }));
+
+  // Cloud save
+  const handleSave = async () => {
+    if (!cloudMode) return;
+    setSaveStatus("Saving...");
+    const slug = (propertyInfo.name || "Untitled").replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 50);
+    const filename = `${slug}_${tier}_${new Date().toISOString().split("T")[0]}`;
+    const data = { tier, scores, scoreSources, propertyInfo, notes, uploadedDocs, savedAt: new Date().toISOString() };
+    const ok = await window.__saveScorecard(data, filename);
+    setSaveStatus(ok ? "Saved" : "Save failed");
+    setTimeout(() => setSaveStatus(""), 3000);
+  };
+
+  // Cloud load
+  const handleLoadList = async () => {
+    if (!cloudMode) return;
+    setShowLoadPanel(!showLoadPanel);
+    if (!showLoadPanel) {
+      const files = await window.__listScorecards();
+      setSavedFiles(files);
+    }
+  };
+
+  const handleLoadFile = async (filename) => {
+    const data = await window.__loadScorecard(filename);
+    if (data) {
+      setTier(data.tier || "T1");
+      setScores(data.scores || {});
+      setScoreSources(data.scoreSources || {});
+      setPropertyInfo(data.propertyInfo || { name: "", market: "", marketComposite: "", buildingType: "", totalSF: "", yearBuilt: "", askingPrice: "", priceSF: "", dateEvaluated: new Date().toISOString().split("T")[0], evaluator: "" });
+      setNotes(data.notes || "");
+      setUploadedDocs(data.uploadedDocs || []);
+      setMarketSearch(data.propertyInfo?.market || "");
+      setShowLoadPanel(false);
+    }
+  };
+
+  // Handle PDF upload
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const docType = DOC_TYPES.find((d) => d.id === selectedDocType);
+    setUploading(true);
+    setUploadStatus(`Reading ${file.name}...`);
+    try {
+      const pdfBase64 = await readFileAsBase64(file);
+      setUploadStatus(`Analyzing ${file.name} as ${docType.label}...`);
+      const prompt = buildPrompt(selectedDocType, "(see attached PDF)", tier);
+      const result = await callClaude(prompt, pdfBase64);
+
+      if (result.propertyInfo) {
+        const pi = result.propertyInfo;
+        setPropertyInfo((prev) => ({
+          ...prev,
+          name: prev.name || pi.name || "",
+          totalSF: prev.totalSF || pi.totalSF || "",
+          yearBuilt: prev.yearBuilt || pi.yearBuilt || "",
+          askingPrice: prev.askingPrice || pi.askingPrice || "",
+          priceSF: prev.priceSF || pi.priceSF || "",
+          buildingType: prev.buildingType || pi.buildingType || "",
+        }));
+      }
+
+      let filledCount = 0;
+      if (result.scores) {
+        const newScores = { ...scores };
+        const newSources = { ...scoreSources };
+        for (const [id, data] of Object.entries(result.scores)) {
+          if (data.score != null && data.score >= 1 && data.score <= 5) {
+            if (newScores[id] == null || newSources[id]) {
+              newScores[id] = data.score;
+              newSources[id] = { docName: file.name, docType: selectedDocType, icon: docType.icon, color: docType.color, reasoning: data.reasoning || "" };
+              filledCount++;
+            }
+          }
+        }
+        setScores(newScores);
+        setScoreSources(newSources);
+      }
+
+      setUploadedDocs((prev) => [...prev, {
+        id: Date.now(), fileName: file.name, docType: selectedDocType, docLabel: docType.label,
+        icon: docType.icon, color: docType.color, criteriaFilled: filledCount,
+        notes: result.notes || "", timestamp: new Date().toLocaleTimeString(),
+      }]);
+      setUploadStatus(`${file.name} \u2014 filled ${filledCount} criteria.`);
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (err) {
+      setUploadStatus(`Error: ${err.message}`);
+    } finally { setUploading(false); }
+  };
+
+  const removeDoc = (docId) => {
+    const doc = uploadedDocs.find((d) => d.id === docId);
+    if (!doc) return;
+    const newScores = { ...scores };
+    const newSources = { ...scoreSources };
+    for (const [id, src] of Object.entries(newSources)) {
+      if (src.docName === doc.fileName && src.docType === doc.docType) {
+        delete newScores[id];
+        delete newSources[id];
+      }
+    }
+    setScores(newScores);
+    setScoreSources(newSources);
+    setUploadedDocs((prev) => prev.filter((d) => d.id !== docId));
+  };
+
+  // ─── Download Excel ───
+  const downloadExcel = async () => {
+    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+    const wb = XLSX.utils.book_new();
+    const summaryRows = [
+      ["STILLPORT RE SELECTION SCORECARD"], [`Tier: ${config.label}`], [],
+      ["PROPERTY INFORMATION"],
+      ["Property Name / Address", propertyInfo.name || "\u2014"],
+      ["Market", propertyInfo.market || "\u2014"],
+      ["Market Composite Score", propertyInfo.marketComposite || "\u2014"],
+      ["Building Type", propertyInfo.buildingType || "\u2014"],
+      ["Total SF", propertyInfo.totalSF || "\u2014"],
+      ["Year Built", propertyInfo.yearBuilt || "\u2014"],
+      ["Asking Price", propertyInfo.askingPrice || "\u2014"],
+      ["Price per SF", propertyInfo.priceSF || "\u2014"],
+      ["Date Evaluated", propertyInfo.dateEvaluated || "\u2014"],
+      ["Evaluator", propertyInfo.evaluator || "\u2014"],
+      [],
+    ];
+    if (SF_RANGES[tier]) {
+      summaryRows.push(["SF RANGE GATE", sfGateResult ? (sfGateResult.pass ? "PASS" : "FAIL") : "N/A"]);
+      if (sfGateResult) summaryRows.push(["", sfGateResult.reason]);
+    } else {
+      summaryRows.push(["SF RANGE GATE", `Not applicable for ${config.label}`]);
+    }
+    summaryRows.push([], ["SCORING DIMENSIONS"], ["Dimension", "Weight", "Average", "Weighted"]);
+    dimensions.forEach((dim, i) => {
+      summaryRows.push([dim.name, `${Math.round(dim.weight * 100)}%`, dimAverages[i] != null ? Number(dimAverages[i].toFixed(2)) : "\u2014", weightedComponents[i] != null ? Number(weightedComponents[i].toFixed(3)) : "\u2014"]);
+    });
+    summaryRows.push([], ["WEIGHTED COMPOSITE SCORE", compositeScore != null ? Number(compositeScore.toFixed(2)) : "\u2014"],
+      ["QUALIFICATION", tierResult.label], [`Prime: ${config.prime}+ | Strong: ${config.strong}+ | Viable: ${config.viable}+`],
+      [], ["NOTES"], [notes || "\u2014"]);
+    const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+    ws1["!cols"] = [{ wch: 36 }, { wch: 18 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+
+    const detailRows = [["DETAILED SCORING \u2014 " + config.label], [], ["Dimension", "Criterion", "Score (1-5)", "Source", "Reasoning"]];
+    dimensions.forEach((dim) => {
+      dim.criteria.forEach((crit) => {
+        const score = scores[crit.id];
+        const src = scoreSources[crit.id];
+        detailRows.push([dim.name, crit.label, score != null ? score : "\u2014", src ? `AI (${src.docName})` : score != null ? "Manual" : "\u2014", src ? src.reasoning : ""]);
+      });
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
+    ws2["!cols"] = [{ wch: 28 }, { wch: 32 }, { wch: 12 }, { wch: 24 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws2, "Detailed Scores");
+
+    if (uploadedDocs.length > 0) {
+      const docRows = [["DOCUMENTS ANALYZED"], [], ["File Name", "Type", "Criteria Filled", "Time", "Notes"]];
+      uploadedDocs.forEach((doc) => docRows.push([doc.fileName, doc.docLabel, doc.criteriaFilled, doc.timestamp, doc.notes || ""]));
+      const ws3 = XLSX.utils.aoa_to_sheet(docRows);
+      ws3["!cols"] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 60 }];
+      XLSX.utils.book_append_sheet(wb, ws3, "Documents");
+    }
+
+    const addrSlug = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
+    const scoreStr = compositeScore != null ? compositeScore.toFixed(2) : "unscored";
+    const filename = `${addrSlug}_Scorecard_${scoreStr}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ─── Download PDF Strategy Briefing ───
+  const downloadPdfBriefing = async () => {
+    setGeneratingPdf(true);
+    try {
+      const dimSummary = dimensions.map((dim, i) => {
+        const critDetail = dim.criteria.map((c) => {
+          const s = scores[c.id]; const src = scoreSources[c.id];
+          return `  - ${c.label}: ${s != null ? `${s}/5` : "not scored"}${src ? ` (${src.reasoning})` : ""}`;
+        }).join("\n");
+        return `${dim.name} (${Math.round(dim.weight * 100)}%): avg ${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "N/A"}\n${critDetail}`;
+      }).join("\n\n");
+
+      const briefingPrompt = `You are a senior real estate analyst at Stillport, a premium bathhouse concept. Generate a professional Strategy Briefing.
+
+PROPERTY: ${propertyInfo.name || "Unknown"}
+MARKET: ${propertyInfo.market || "Unknown"} (Market Composite: ${propertyInfo.marketComposite || "N/A"})
+TIER: ${config.label}
+BUILDING: ${propertyInfo.buildingType || "N/A"}, ${propertyInfo.totalSF || "N/A"} SF, Built ${propertyInfo.yearBuilt || "N/A"}
+PRICE: ${propertyInfo.askingPrice || "N/A"} (${propertyInfo.priceSF || "N/A"}/SF)
+DATE: ${propertyInfo.dateEvaluated || "N/A"}
+EVALUATOR: ${propertyInfo.evaluator || "N/A"}
+
+COMPOSITE SCORE: ${compositeScore != null ? compositeScore.toFixed(2) : "N/A"} \u2014 ${tierResult.label}
+(Prime: ${config.prime}+ | Strong: ${config.strong}+ | Viable: ${config.viable}+)
+${!allDimsScored ? `Note: ${scoredDimCount}/${dimensions.length} dimensions scored (preliminary)` : ""}
+
+SF RANGE GATE: ${!SF_RANGES[tier] ? `Not applicable for ${config.label}` : sfGateResult ? `${sfGateResult.pass ? "PASS" : "FAIL"} \u2014 ${sfGateResult.reason}` : "Not evaluated"}
+
+DIMENSION SCORES:
+${dimSummary}
+
+EVALUATOR NOTES: ${notes || "None"}
+
+DOCUMENTS ANALYZED: ${uploadedDocs.length > 0 ? uploadedDocs.map((d) => `${d.docLabel}: ${d.fileName}`).join("; ") : "None"}
+
+Write a professional strategy briefing with these sections:
+1. EXECUTIVE SUMMARY (2-3 sentences)
+2. MARKET CONTEXT
+3. STRENGTHS (top scoring dimensions/criteria)
+4. RISK FACTORS (lowest scoring)
+5. CRITICAL INFRASTRUCTURE
+6. ACQUISITION ECONOMICS ASSESSMENT
+7. RECOMMENDATION (go/no-go with conditions)
+
+Return ONLY a JSON object: { "sections": [ { "title": "string", "content": "string" } ] }
+Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": API_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 3000, messages: [{ role: "user", content: briefingPrompt }] }),
+      });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      const jsonMatch = data.content[0].text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Could not parse briefing response");
+      const briefing = JSON.parse(jsonMatch[0]);
+
+      const tierColor = tier === "T1" ? DARK : T2_ACCENT;
+      const qualColor = tierResult.color;
+      const dimTable = dimensions.map((dim, i) =>
+        `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${dim.name}</td>
+         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${Math.round(dim.weight * 100)}%</td>
+         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:${DARK}">${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014"}</td></tr>`
+      ).join("");
+      const sectionsHtml = briefing.sections.map((s) =>
+        `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
+      ).join("");
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Strategy Briefing \u2014 ${propertyInfo.name || "Property"}</title>
+<style>@media print{body{margin:0.5in}@page{size:letter;margin:0.6in}}</style></head>
+<body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;color:#333">
+<div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
+      <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:4px 0 0">Real Estate Selection Scorecard \u2014 ${config.label}</p></div>
+    <div style="text-align:right">
+      <div style="font-family:Georgia,serif;color:${GOLD};font-size:36px;font-weight:700">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</div>
+      <div style="color:${qualColor};font-weight:700;font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,0.3)">${tierResult.label}</div></div>
+  </div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:24px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #eee">
+  <div><span style="font-size:11px;color:#888">Property</span><br><strong style="font-size:13px">${propertyInfo.name || "\u2014"}</strong></div>
+  <div><span style="font-size:11px;color:#888">Market</span><br><strong style="font-size:13px">${propertyInfo.market || "\u2014"} (${propertyInfo.marketComposite || "\u2014"})</strong></div>
+  <div><span style="font-size:11px;color:#888">Building</span><br><strong style="font-size:13px">${propertyInfo.buildingType || "\u2014"}, ${propertyInfo.totalSF || "\u2014"} SF</strong></div>
+  <div><span style="font-size:11px;color:#888">Price</span><br><strong style="font-size:13px">${propertyInfo.askingPrice || "\u2014"} (${propertyInfo.priceSF || "\u2014"}/SF)</strong></div>
+  <div><span style="font-size:11px;color:#888">Date Evaluated</span><br><strong style="font-size:13px">${propertyInfo.dateEvaluated || "\u2014"}</strong></div>
+  <div><span style="font-size:11px;color:#888">Evaluator</span><br><strong style="font-size:13px">${propertyInfo.evaluator || "\u2014"}</strong></div></div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:24px;border:1px solid #eee;border-radius:6px;overflow:hidden">
+  <tr style="background:${tierColor}"><th style="padding:8px 12px;color:${GOLD};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
+  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Weight</th>
+  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Score</th></tr>
+  ${dimTable}
+  <tr style="background:${LIGHT_GOLD}"><td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:${DARK}">Composite</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
+${sectionsHtml}
+<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
+  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></body></html>`;
+
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank");
+      if (win) { win.onload = () => setTimeout(() => win.print(), 500); }
+      URL.revokeObjectURL(url);
+    } catch (err) { alert(`Error generating briefing: ${err.message}`); }
+    finally { setGeneratingPdf(false); }
+  };
+
+  const handleReset = () => {
+    setScores({}); setScoreSources({}); setUploadedDocs([]);
+    setPropertyInfo({ name: "", market: "", marketComposite: "", buildingType: "", totalSF: "", yearBuilt: "", askingPrice: "", priceSF: "", dateEvaluated: new Date().toISOString().split("T")[0], evaluator: "" });
+    setNotes(""); setUploadStatus(""); setMarketSearch(""); setMarketManuallySet(false);
+  };
+
+  // Market dropdown filter
+  const filteredMarkets = marketSearch.length >= 2
+    ? MARKETS.filter((m) => m.n.toLowerCase().includes(marketSearch.toLowerCase())).slice(0, 12)
+    : [];
+
+  return (
+    <div style={{ fontFamily: "Arial, sans-serif", maxWidth: 880, margin: "0 auto", padding: "0 16px 24px", background: "#FAFAFA", minHeight: "100vh" }}>
+
+      {/* Top Bar */}
+      {user && (
+        <div className="topbar" style={{ margin: "0 -16px", marginBottom: 20 }}>
+          <div className="user-info">
+            <span>{user.name || user.username}</span>
+            {cloudMode && (
+              <>
+                <button onClick={handleSave}>Save to OneDrive</button>
+                <button onClick={handleLoadList}>Load Scorecard</button>
+                {saveStatus && <span className="save-indicator">{saveStatus}</span>}
+              </>
+            )}
+          </div>
+          <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>RE Selection Scorecard</span>
+        </div>
+      )}
+
+      {/* Load Panel */}
+      {showLoadPanel && (
+        <div style={{ background: "#fff", borderRadius: 8, padding: 16, marginBottom: 16, border: `2px solid ${GOLD}` }}>
+          <h3 style={{ fontFamily: "Georgia, serif", color: DARK, fontSize: 14, margin: "0 0 12px" }}>Saved Scorecards</h3>
+          {savedFiles.length === 0 ? (
+            <p style={{ color: "#888", fontSize: 13 }}>No saved scorecards found in OneDrive.</p>
+          ) : (
+            savedFiles.map((f) => (
+              <div key={f.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{f.name.replace(".json", "")}</div>
+                  <div style={{ fontSize: 11, color: "#888" }}>{new Date(f.lastModifiedDateTime).toLocaleDateString()}</div>
+                </div>
+                <button onClick={() => handleLoadFile(f.name)}
+                  style={{ padding: "6px 16px", borderRadius: 4, border: `1px solid ${DARK}`, background: DARK, color: GOLD, fontSize: 12, cursor: "pointer" }}>
+                  Load
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background: config.accent, padding: "24px 28px", borderRadius: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 style={{ fontFamily: "Georgia, serif", color: GOLD, fontSize: 24, margin: 0 }}>
+              Stillport RE Selection Scorecard
+            </h1>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, margin: "4px 0 0" }}>
+              Property-Level Screening & Evaluation
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={tier} onChange={(e) => { setTier(e.target.value); setScores({}); setScoreSources({}); setUploadedDocs([]); }}
+              style={{ padding: "8px 16px", borderRadius: 6, border: `2px solid ${GOLD}`, background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              <option value="T1" style={{ color: "#333" }}>T1 Flagship</option>
+              <option value="T2" style={{ color: "#333" }}>T2 Core</option>
+            </select>
+            <button onClick={handleReset} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer" }}>
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Document Upload Center */}
+      <div style={{ background: "#fff", borderRadius: 8, marginBottom: 16, border: "1px solid #eee", overflow: "hidden" }}>
+        <div style={{ background: DARK, padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "Georgia, serif", color: GOLD, fontSize: 15, fontWeight: 600 }}>Document Upload Center</span>
+          {uploadedDocs.length > 0 && (
+            <button onClick={() => setShowDocPanel(!showDocPanel)}
+              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "4px 12px", borderRadius: 4, fontSize: 12, cursor: "pointer" }}>
+              {uploadedDocs.length} doc{uploadedDocs.length > 1 ? "s" : ""} uploaded {showDocPanel ? "\u25B2" : "\u25BC"}
+            </button>
+          )}
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            {DOC_TYPES.map((dt) => (
+              <button key={dt.id} onClick={() => setSelectedDocType(dt.id)}
+                style={{ padding: "8px 14px", borderRadius: 6,
+                  border: `2px solid ${selectedDocType === dt.id ? dt.color : "#eee"}`,
+                  background: selectedDocType === dt.id ? `${dt.color}15` : "#fff",
+                  color: selectedDocType === dt.id ? dt.color : "#666",
+                  fontSize: 12, fontWeight: selectedDocType === dt.id ? 700 : 400, cursor: "pointer" }}>
+                {dt.icon} {dt.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
+            {DOC_TYPES.find((d) => d.id === selectedDocType)?.desc} &mdash; <em>Targets: {DOC_TYPES.find((d) => d.id === selectedDocType)?.targets}</em>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <input ref={fileRef} type="file" accept=".pdf" onChange={handleUpload} disabled={uploading}
+              style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 4, fontSize: 13 }} />
+          </div>
+          {uploadStatus && (
+            <div style={{ marginTop: 8, fontSize: 12, color: uploading ? GOLD : uploadStatus.startsWith("Error") ? RED : GREEN, fontStyle: "italic" }}>
+              {uploadStatus}
+            </div>
+          )}
+        </div>
+        {showDocPanel && uploadedDocs.length > 0 && (
+          <div style={{ borderTop: "1px solid #eee", padding: "12px 20px" }}>
+            {uploadedDocs.map((doc) => (
+              <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f5f5f5" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: doc.color, fontSize: 16 }}>{doc.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{doc.fileName}</div>
+                    <div style={{ fontSize: 11, color: "#888" }}>{doc.docLabel} &bull; {doc.criteriaFilled} criteria filled &bull; {doc.timestamp}</div>
+                  </div>
+                </div>
+                <button onClick={() => removeDoc(doc.id)}
+                  style={{ background: "none", border: "1px solid #ddd", color: "#999", padding: "2px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer" }}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Property Information */}
+      <div style={{ background: "#fff", borderRadius: 8, padding: 20, marginBottom: 16, border: "1px solid #eee" }}>
+        <h3 style={{ fontFamily: "Georgia, serif", color: DARK, fontSize: 15, margin: "0 0 16px", borderBottom: `2px solid ${GOLD}`, paddingBottom: 6 }}>Property Information</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px" }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>Property Name / Address</label>
+            <input value={propertyInfo.name} onChange={(e) => handleInfo("name", e.target.value)}
+              style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 4, fontSize: 14, marginTop: 4 }}
+              placeholder="123 Main St, City, ST 00000" />
+          </div>
+          <div style={{ position: "relative" }}>
+            <label style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>Market</label>
+            <input value={marketSearch} onChange={(e) => { setMarketSearch(e.target.value); setShowMarketDropdown(true); }}
+              onFocus={() => setShowMarketDropdown(true)}
+              style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 4, fontSize: 13, marginTop: 4 }}
+              placeholder="Search markets..." />
+            {showMarketDropdown && filteredMarkets.length > 0 && (
+              <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #ddd", borderRadius: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 10, maxHeight: 240, overflow: "auto" }}>
+                {filteredMarkets.map((m) => (
+                  <div key={m.n} onClick={() => {
+                    setMarketSearch(m.n); handleInfo("market", m.n); handleInfo("marketComposite", String(m.c));
+                    setMarketManuallySet(true); setShowMarketDropdown(false);
+                    if (m.t !== tier) { setTier(m.t); setScores({}); setScoreSources({}); setUploadedDocs([]); }
+                  }}
+                  style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f5f5f5", display: "flex", justifyContent: "space-between" }}>
+                    <span>{m.n}</span>
+                    <span style={{ color: m.t === "T1" ? T1_ACCENT : T2_ACCENT, fontWeight: 600, fontSize: 12 }}>{m.c} ({m.t})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>Market Composite</label>
+            <input value={propertyInfo.marketComposite} onChange={(e) => handleInfo("marketComposite", e.target.value)}
+              style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 4, fontSize: 13, marginTop: 4, background: "#f9f9f9" }} readOnly />
+          </div>
+          {[
+            { key: "buildingType", label: "Building Type", ph: "Retail, Office, etc." },
+            { key: "totalSF", label: "Total SF", ph: "e.g. 8500" },
+            { key: "yearBuilt", label: "Year Built", ph: "e.g. 1965" },
+            { key: "askingPrice", label: "Asking Price", ph: "e.g. $2,400,000" },
+            { key: "priceSF", label: "Price per SF", ph: "e.g. $282" },
+            { key: "dateEvaluated", label: "Date Evaluated", ph: "" },
+            { key: "evaluator", label: "Evaluator", ph: "Your name" },
+          ].map((f) => (
+            <div key={f.key}>
+              <label style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>{f.label}</label>
+              <input value={propertyInfo[f.key]} onChange={(e) => handleInfo(f.key, e.target.value)}
+                type={f.key === "dateEvaluated" ? "date" : "text"}
+                style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 4, fontSize: 13, marginTop: 4 }}
+                placeholder={f.ph} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SF Range Gate */}
+      {SF_RANGES[tier] && sfGateResult && (
+        <div style={{
+          background: sfGateResult.pass ? "#E8F5E9" : WARN_RED, borderRadius: 8, padding: 16, marginBottom: 16,
+          border: `2px solid ${sfGateResult.pass ? GREEN : RED}`, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 24, fontWeight: 700, color: sfGateResult.pass ? GREEN : RED }}>
+            {sfGateResult.pass ? "\u2713" : "\u2717"}
+          </span>
+          <div>
+            <div style={{ fontWeight: 700, color: sfGateResult.pass ? GREEN : RED, fontSize: 14 }}>
+              SF Range Gate: {sfGateResult.pass ? "PASS" : "FAIL"}
+            </div>
+            <div style={{ fontSize: 12, color: "#666" }}>{sfGateResult.reason}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Scoring Dimensions */}
+      {dimensions.map((dim, di) => (
+        <div key={dim.name} style={{ background: "#fff", borderRadius: 8, marginBottom: 8, border: "1px solid #eee", overflow: "hidden" }}>
+          <div onClick={() => setExpandedDim(expandedDim === di ? null : di)}
+            style={{ cursor: "pointer", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: expandedDim === di ? config.accent : "#fff" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontFamily: "Georgia, serif", fontSize: 14, fontWeight: 600,
+                color: expandedDim === di ? GOLD : DARK }}>{dim.name}</span>
+              <span style={{ fontSize: 11, color: expandedDim === di ? "rgba(255,255,255,0.4)" : "#aaa" }}>
+                {Math.round(dim.weight * 100)}%
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {dimAverages[di] != null && (
+                <span style={{ fontWeight: 700, fontSize: 16, color: expandedDim === di ? GOLD : DARK }}>
+                  {dimAverages[di].toFixed(2)}
+                </span>
+              )}
+              <span style={{ color: expandedDim === di ? "rgba(255,255,255,0.5)" : "#aaa", fontSize: 12 }}>
+                {dim.criteria.filter((c) => scores[c.id] != null).length}/{dim.criteria.length}
+              </span>
+              <span style={{ color: expandedDim === di ? "rgba(255,255,255,0.5)" : "#aaa" }}>{expandedDim === di ? "\u25B2" : "\u25BC"}</span>
+            </div>
+          </div>
+          {expandedDim === di && (
+            <div style={{ padding: "8px 0" }}>
+              {dim.criteria.map((crit, ci) => (
+                <div key={crit.id} style={{
+                  padding: "10px 16px", background: ci % 2 === 0 ? LIGHT_GOLD : "#fff",
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>{crit.label}</div>
+                    <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{crit.guide}</div>
+                    {scoreSources[crit.id] && (
+                      <div style={{ fontSize: 10, color: scoreSources[crit.id].color, marginTop: 3, fontStyle: "italic" }}>
+                        {scoreSources[crit.id].reasoning}
+                      </div>
+                    )}
+                  </div>
+                  <ScoreInput value={scores[crit.id]} onChange={(v) => handleScore(crit.id, v)}
+                    binary={crit.binary} source={scoreSources[crit.id]} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Composite Score */}
+      <div style={{ background: config.accent, borderRadius: 8, padding: 24, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: "Georgia, serif", color: "rgba(255,255,255,0.6)", fontSize: 13 }}>
+              Weighted Composite Score{!allDimsScored && compositeScore != null ? ` (${scoredDimCount}/${dimensions.length} dimensions)` : ""}
+            </div>
+            <div style={{ fontFamily: "Georgia, serif", color: GOLD, fontSize: 42, fontWeight: 700, lineHeight: 1.1 }}>
+              {compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}
+            </div>
+            {!allDimsScored && compositeScore != null && (
+              <div style={{ fontSize: 11, color: "#FF9800", marginTop: 2 }}>Preliminary \u2014 score remaining dimensions for final composite</div>
+            )}
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+              {scoredCount} of {totalCriteria} criteria scored
+              {Object.keys(scoreSources).length > 0 && (
+                <span> ({Object.keys(scoreSources).length} AI / {scoredCount - Object.keys(scoreSources).length} manual)</span>
+              )}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Qualification</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: tierResult.color, fontFamily: "Georgia, serif", textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>
+              {tierResult.label}
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+              Prime: {config.prime}+ | Strong: {config.strong}+ | Viable: {config.viable}+
+            </div>
+          </div>
+        </div>
+        {compositeScore != null && (
+          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12 }}>
+            {dimensions.map((dim, i) => (
+              <div key={dim.name} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
+                <span style={{ color: "rgba(255,255,255,0.6)" }}>{dim.name} ({Math.round(dim.weight * 100)}%)</span>
+                <span style={{ color: GOLD, fontWeight: 600 }}>
+                  {dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014"} \u00D7 {dim.weight} = {weightedComponents[i] != null ? weightedComponents[i].toFixed(3) : "\u2014"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Download Buttons */}
+      {compositeScore != null && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          <button onClick={downloadExcel}
+            style={{ flex: 1, padding: "14px 20px", borderRadius: 8, border: `2px solid ${GOLD}`, cursor: "pointer",
+              background: "#fff", color: DARK, fontSize: 14, fontWeight: 600, fontFamily: "Georgia, serif",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            Download Filled Scorecard (.xlsx)
+          </button>
+          <button onClick={downloadPdfBriefing} disabled={generatingPdf}
+            style={{ flex: 1, padding: "14px 20px", borderRadius: 8, border: "none", cursor: generatingPdf ? "wait" : "pointer",
+              background: `linear-gradient(135deg, ${config.accent}, ${DARK})`, color: GOLD,
+              fontSize: 14, fontWeight: 600, fontFamily: "Georgia, serif",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              opacity: generatingPdf ? 0.7 : 1 }}>
+            {generatingPdf ? "Generating Briefing..." : "Download Strategy Briefing (.pdf)"}
+          </button>
+        </div>
+      )}
+
+      {/* Notes */}
+      <div style={{ background: "#fff", borderRadius: 8, padding: 16, border: "1px solid #eee", marginBottom: 24 }}>
+        <h3 style={{ fontFamily: "Georgia, serif", color: DARK, fontSize: 14, margin: "0 0 8px" }}>Notes & Observations</h3>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
+          style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 4, fontSize: 13, resize: "vertical", boxSizing: "border-box" }}
+          placeholder="Additional notes about this property..." />
+      </div>
+
+      <div style={{ textAlign: "center", color: "#bbb", fontSize: 11, paddingBottom: 32 }}>
+        Stillport Real Estate Selection Scorecard \u2014 {config.label}
+      </div>
+    </div>
+  );
+};
+</script>
+</body>
+</html>

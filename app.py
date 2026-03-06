@@ -5,9 +5,10 @@ Serves both OutreachFlow and Stillport Fundraise CRM as a single deployment,
 plus the email open tracking pixel server.
 
 Routes:
-  /                         — Landing page with links to both apps
+  /                         — Landing page with links to all apps
   /outreach                 — OutreachFlow email campaign app
   /crm                      — Stillport Fundraise CRM
+  /scorecard                — RE Scorecard (AI-powered deal scoring)
   /track?tid=...&cid=...    — Tracking pixel endpoint
   /events?cids=...          — Open event data
   /health                   — Health check
@@ -38,7 +39,7 @@ def index():
         .container {{ text-align:center; max-width:500px; padding:40px; }}
         h1 {{ font-size:28px; font-weight:700; background:linear-gradient(135deg,#6366f1,#10b981); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }}
         .sub {{ color:#6b7394; font-size:14px; margin-bottom:32px; }}
-        .cards {{ display:flex; gap:16px; justify-content:center; }}
+        .cards {{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }}
         .card {{ background:#1a1d27; border:1px solid #333850; border-radius:12px; padding:24px; flex:1; text-decoration:none; color:#e2e5f0; transition:all .2s; }}
         .card:hover {{ border-color:#6366f1; transform:translateY(-2px); box-shadow:0 8px 24px rgba(99,102,241,.15); }}
         .card h2 {{ font-size:16px; margin-bottom:6px; }}
@@ -64,6 +65,11 @@ def index():
             <p>Email campaigns, templates, open tracking</p>
             <span class="badge badge-purple">Open App</span>
           </a>
+          <a href="/scorecard" class="card">
+            <h2>RE Scorecard</h2>
+            <p>AI-powered deal scoring &amp; investment analysis</p>
+            <span class="badge badge-green">Open App</span>
+          </a>
         </div>
         <div class="footer">Authenticated via Microsoft 365</div>
       </div>
@@ -78,6 +84,10 @@ def crm():
 @app.route('/outreach')
 def outreach():
     return send_file(os.path.join(APP_DIR, 'outreach-app.html'))
+
+@app.route('/scorecard')
+def scorecard():
+    return send_file(os.path.join(APP_DIR, 'stillport-re-scorecard.html'))
 
 
 # ===== TRACKING PIXEL SERVER =====
@@ -157,5 +167,6 @@ if __name__ == '__main__':
     print(f"\n  Stillport Apps Server running on http://0.0.0.0:{port}")
     print(f"  CRM:          http://localhost:{port}/crm")
     print(f"  OutreachFlow:  http://localhost:{port}/outreach")
+    print(f"  RE Scorecard:  http://localhost:{port}/scorecard")
     print(f"  Tracker:       http://localhost:{port}/track\n")
     app.run(host='0.0.0.0', port=port, debug=False)
