@@ -24,6 +24,7 @@ import threading
 import requests as http_requests
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024   # 50 MB max upload
 CORS(app)
 
 # ===== STATIC APP FILES =====
@@ -97,11 +98,20 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
 @app.route('/api/score', methods=['POST'])
 def api_score():
-    """Proxy endpoint for Anthropic API calls — keeps API key server-side."""
+    """Proxy endpoint for Anthropic API calls — keeps API key server-side.
+
+    Streams the raw request body directly to Anthropic to avoid
+    parsing + re-serialising large PDF base64 payloads in memory
+    (critical on Render free-tier 512 MB instances).
+    """
     if not ANTHROPIC_API_KEY:
         return jsonify({'error': 'API key not configured on server'}), 500
     try:
-        payload = request.get_json()
+        import traceback, sys
+        raw_body = request.get_data()            # raw bytes — no JSON parse
+        content_len = len(raw_body)
+        print(f"[api/score] Incoming request: {content_len:,} bytes", flush=True)
+
         resp = http_requests.post(
             'https://api.anthropic.com/v1/messages',
             headers={
@@ -109,12 +119,23 @@ def api_score():
                 'x-api-key': ANTHROPIC_API_KEY,
                 'anthropic-version': '2023-06-01',
             },
-            json=payload,
-            timeout=120,
+            data=raw_body,                        # forward raw bytes
+            timeout=150,
+            stream=True,                          # stream the response
         )
-        return Response(resp.content, status=resp.status_code,
+        # Read response in chunks to keep memory low
+        response_chunks = []
+        for chunk in resp.iter_content(chunk_size=8192):
+            response_chunks.append(chunk)
+        response_body = b''.join(response_chunks)
+        del raw_body                              # free request memory early
+
+        print(f"[api/score] Anthropic responded: {resp.status_code} ({len(response_body):,} bytes)", flush=True)
+        return Response(response_body, status=resp.status_code,
                         content_type=resp.headers.get('Content-Type', 'application/json'))
     except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
         return jsonify({'error': str(e)}), 500
 
 
