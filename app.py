@@ -100,7 +100,47 @@ def scorecard():
 
 # ===== ANTHROPIC API PROXY =====
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')
+
+# ===== DROPBOX CONFIG =====
+DROPBOX_REFRESH_TOKEN = os.environ.get('DROPBOX_REFRESH_TOKEN', '')
+DROPBOX_APP_KEY = os.environ.get('DROPBOX_APP_KEY', '')
+DROPBOX_APP_SECRET = os.environ.get('DROPBOX_APP_SECRET', '')
+# Cache for the short-lived access token
+_dropbox_token_cache = {'token': '', 'expires_at': 0}
+
+def get_dropbox_access_token():
+    """Get a valid Dropbox access token, refreshing if needed."""
+    import time
+    now = time.time()
+    if _dropbox_token_cache['token'] and _dropbox_token_cache['expires_at'] > now + 60:
+        return _dropbox_token_cache['token']
+
+    if not DROPBOX_REFRESH_TOKEN or not DROPBOX_APP_KEY or not DROPBOX_APP_SECRET:
+        return ''
+
+    try:
+        resp = http_requests.post(
+            'https://api.dropboxapi.com/oauth2/token',
+            data={
+                'grant_type': 'refresh_token',
+                'refresh_token': DROPBOX_REFRESH_TOKEN,
+                'client_id': DROPBOX_APP_KEY,
+                'client_secret': DROPBOX_APP_SECRET,
+            },
+            timeout=15
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            _dropbox_token_cache['token'] = data['access_token']
+            _dropbox_token_cache['expires_at'] = now + data.get('expires_in', 14400)
+            print(f"[dropbox] Refreshed access token (expires in {data.get('expires_in', '?')}s)", flush=True)
+            return _dropbox_token_cache['token']
+        else:
+            print(f"[dropbox] Token refresh failed: {resp.status_code} {resp.text}", flush=True)
+            return ''
+    except Exception as e:
+        print(f"[dropbox] Token refresh error: {e}", flush=True)
+        return ''
 
 @app.route('/api/score', methods=['POST'])
 def api_score():
@@ -163,10 +203,11 @@ def dropbox_upload():
         "contentType": "application/pdf"
     }
     """
-    if not DROPBOX_ACCESS_TOKEN:
-        return jsonify({'error': 'Dropbox token not configured on server'}), 500
-
     try:
+        access_token = get_dropbox_access_token()
+        if not access_token:
+            return jsonify({'error': 'Dropbox not configured — set DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY, DROPBOX_APP_SECRET'}), 500
+
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Request body must be JSON'}), 400
@@ -194,7 +235,7 @@ def dropbox_upload():
 
         # Step 1: Create folder (if it doesn't exist, we'll get a 409 which is fine)
         headers_auth = {
-            'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
+            'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
         }
 
@@ -218,7 +259,7 @@ def dropbox_upload():
 
         # Step 2: Upload file
         upload_headers = {
-            'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
+            'Authorization': f'Bearer {access_token}',
             'Dropbox-API-Arg': json.dumps({
                 'path': file_path,
                 'mode': 'overwrite'
