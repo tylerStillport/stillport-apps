@@ -980,23 +980,35 @@ ${sectionsHtml}
   Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
       // Convert briefing HTML to PDF via html2pdf
       setDropboxStatus("Converting briefing to PDF...");
-      const container = document.createElement("div");
-      container.innerHTML = briefBodyContent;
-      container.style.position = "fixed";
-      container.style.left = "0";
-      container.style.top = "0";
-      container.style.width = "800px";
-      container.style.zIndex = "-9999";
-      container.style.opacity = "0";
-      container.style.pointerEvents = "none";
-      document.body.appendChild(container);
+      const dbxWrapper = document.createElement("div");
+      dbxWrapper.style.position = "fixed";
+      dbxWrapper.style.left = "0";
+      dbxWrapper.style.top = "0";
+      dbxWrapper.style.width = "0";
+      dbxWrapper.style.height = "0";
+      dbxWrapper.style.overflow = "hidden";
+      dbxWrapper.style.zIndex = "-9999";
+      const dbxContainer = document.createElement("div");
+      dbxContainer.setAttribute("data-pdf-render", "true");
+      dbxContainer.innerHTML = briefBodyContent;
+      dbxContainer.style.width = "800px";
+      dbxContainer.style.background = "white";
+      dbxWrapper.appendChild(dbxContainer);
+      document.body.appendChild(dbxWrapper);
       const pdfBlob = await html2pdf().set({
         margin: [0.5, 0.6, 0.5, 0.6],
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, width: 800 },
+        html2canvas: { scale: 2, useCORS: true, width: 800, onclone: function(clonedDoc) {
+          var el = clonedDoc.querySelector("[data-pdf-render]");
+          if (el && el.parentElement) {
+            el.parentElement.style.width = "800px";
+            el.parentElement.style.height = "auto";
+            el.parentElement.style.overflow = "visible";
+          }
+        }},
         jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      }).from(container).outputPdf("blob");
-      document.body.removeChild(container);
+      }).from(dbxContainer).outputPdf("blob");
+      document.body.removeChild(dbxWrapper);
       const briefFilename = `${addrSlug}_Strategy_Briefing.pdf`;
 
       // 3) Upload both to Dropbox
@@ -1371,27 +1383,40 @@ ${sectionsHtml}
 <div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
   Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
 
-      // Render into a hidden but layout-visible container for html2pdf
+      // Render into an off-screen container for html2pdf
+      // Wrap in a clipping div so it's not visible to the user, but use onclone to make it visible to html2canvas
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "fixed";
+      wrapper.style.left = "0";
+      wrapper.style.top = "0";
+      wrapper.style.width = "0";
+      wrapper.style.height = "0";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.zIndex = "-9999";
       const container = document.createElement("div");
+      container.setAttribute("data-pdf-render", "true");
       container.innerHTML = bodyContent;
-      container.style.position = "fixed";
-      container.style.left = "0";
-      container.style.top = "0";
       container.style.width = "800px";
-      container.style.zIndex = "-9999";
-      container.style.opacity = "0";
-      container.style.pointerEvents = "none";
-      document.body.appendChild(container);
+      container.style.background = "white";
+      wrapper.appendChild(container);
+      document.body.appendChild(wrapper);
       const addrSlug2 = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
       const scoreStr2 = compositeScore != null ? compositeScore.toFixed(2) : "unscored";
       await html2pdf().set({
         margin: [0.5, 0.6, 0.5, 0.6],
         filename: `${addrSlug2}_Strategy_Briefing_${scoreStr2}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, width: 800 },
+        html2canvas: { scale: 2, useCORS: true, width: 800, onclone: function(clonedDoc) {
+          var el = clonedDoc.querySelector("[data-pdf-render]");
+          if (el && el.parentElement) {
+            el.parentElement.style.width = "800px";
+            el.parentElement.style.height = "auto";
+            el.parentElement.style.overflow = "visible";
+          }
+        }},
         jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
       }).from(container).save();
-      document.body.removeChild(container);
+      document.body.removeChild(wrapper);
     } catch (err) { alert(`Error generating briefing: ${err.message}`); }
     finally { setGeneratingPdf(false); }
   };
