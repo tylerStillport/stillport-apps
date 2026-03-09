@@ -15,7 +15,7 @@ Routes:
   /health                   — Health check
 """
 
-from flask import Flask, request, Response, jsonify, send_file
+from flask import Flask, request, Response, jsonify, send_file, redirect
 from flask_cors import CORS
 from datetime import datetime
 import json
@@ -32,6 +32,10 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @app.route('/')
 def index():
+    # If accessed via scorecard.stillport.co, serve the scorecard directly
+    host = request.headers.get('Host', '')
+    if host.startswith('scorecard.'):
+        return send_file(os.path.join(APP_DIR, 'stillport-re-scorecard.html'))
     return f"""
     <html>
     <head>
