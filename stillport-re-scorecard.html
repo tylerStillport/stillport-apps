@@ -951,9 +951,7 @@ Important: Do not use newlines or special characters inside JSON string values. 
       const sectionsHtml = briefing.sections.map((s) =>
         `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
       ).join("");
-      const briefHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Strategy Briefing \u2014 ${propertyInfo.name || "Property"}</title>
-<style>@media print{body{margin:0.5in}@page{size:letter;margin:0.6in}}</style></head>
-<body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;color:#333">
+      const briefBodyContent = `<div style="font-family:Arial,sans-serif;max-width:800px;padding:24px;color:#333">
 <div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
     <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
@@ -979,21 +977,25 @@ Important: Do not use newlines or special characters inside JSON string values. 
   <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
 ${sectionsHtml}
 <div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
-  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></body></html>`;
+  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
       // Convert briefing HTML to PDF via html2pdf
       setDropboxStatus("Converting briefing to PDF...");
       const container = document.createElement("div");
-      container.innerHTML = briefHtml;
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
+      container.innerHTML = briefBodyContent;
+      container.style.position = "fixed";
+      container.style.left = "0";
       container.style.top = "0";
+      container.style.width = "800px";
+      container.style.zIndex = "-9999";
+      container.style.opacity = "0";
+      container.style.pointerEvents = "none";
       document.body.appendChild(container);
       const pdfBlob = await html2pdf().set({
         margin: [0.5, 0.6, 0.5, 0.6],
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, width: 800 },
         jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      }).from(container.querySelector("body") || container).outputPdf("blob");
+      }).from(container).outputPdf("blob");
       document.body.removeChild(container);
       const briefFilename = `${addrSlug}_Strategy_Briefing.pdf`;
 
@@ -1341,9 +1343,7 @@ Important: Do not use newlines or special characters inside JSON string values. 
         `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
       ).join("");
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Strategy Briefing \u2014 ${propertyInfo.name || "Property"}</title>
-<style>@media print{body{margin:0.5in}@page{size:letter;margin:0.6in}}</style></head>
-<body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;color:#333">
+      const bodyContent = `<div style="font-family:Arial,sans-serif;max-width:800px;padding:24px;color:#333">
 <div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
     <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
@@ -1369,14 +1369,18 @@ Important: Do not use newlines or special characters inside JSON string values. 
   <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
 ${sectionsHtml}
 <div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
-  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></body></html>`;
+  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
 
-      // Render HTML into a hidden container for html2pdf
+      // Render into a hidden but layout-visible container for html2pdf
       const container = document.createElement("div");
-      container.innerHTML = html;
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
+      container.innerHTML = bodyContent;
+      container.style.position = "fixed";
+      container.style.left = "0";
       container.style.top = "0";
+      container.style.width = "800px";
+      container.style.zIndex = "-9999";
+      container.style.opacity = "0";
+      container.style.pointerEvents = "none";
       document.body.appendChild(container);
       const addrSlug2 = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
       const scoreStr2 = compositeScore != null ? compositeScore.toFixed(2) : "unscored";
@@ -1384,9 +1388,9 @@ ${sectionsHtml}
         margin: [0.5, 0.6, 0.5, 0.6],
         filename: `${addrSlug2}_Strategy_Briefing_${scoreStr2}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, width: 800 },
         jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      }).from(container.querySelector("body") || container).save();
+      }).from(container).save();
       document.body.removeChild(container);
     } catch (err) { alert(`Error generating briefing: ${err.message}`); }
     finally { setGeneratingPdf(false); }
