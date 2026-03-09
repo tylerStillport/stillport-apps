@@ -785,6 +785,33 @@ window.StillportREScorecard = function StillportREScorecard() {
   const cloudMode = window.__CLOUD_MODE;
   const user = window.__CURRENT_USER;
 
+  // ─── Helper: Upload to Dropbox ───
+  const uploadToDropbox = async (blob, filename, contentType) => {
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const fileData = await base64Promise;
+      const address = propertyInfo.name || "Unknown_Property";
+      const resp = await fetch("/api/dropbox-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, fileData, propertyAddress: address, contentType }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        console.log("Dropbox upload success:", result.path);
+      } else {
+        console.warn("Dropbox upload failed:", result.error);
+      }
+    } catch (err) {
+      console.warn("Dropbox upload error:", err);
+    }
+  };
+
   // Close market dropdown when clicking outside
   useEffect(() => {
     const handleClick = () => setShowMarketDropdown(false);
@@ -1024,6 +1051,8 @@ window.StillportREScorecard = function StillportREScorecard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
+    // Auto-upload to Dropbox
+    uploadToDropbox(blob, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     } catch (err) { alert(`Error downloading Excel: ${err.message}`); console.error("Excel download error:", err); }
   };
 
@@ -1147,6 +1176,10 @@ ${sectionsHtml}
       const win = window.open(url, "_blank");
       if (win) { win.onload = () => setTimeout(() => win.print(), 500); }
       URL.revokeObjectURL(url);
+      // Auto-upload Strategy Briefing to Dropbox
+      const briefAddrSlug = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
+      const briefFilename = `${briefAddrSlug}_Strategy_Briefing.html`;
+      uploadToDropbox(blob, briefFilename, "text/html");
     } catch (err) { alert(`Error generating briefing: ${err.message}`); }
     finally { setGeneratingPdf(false); }
   };

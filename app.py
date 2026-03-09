@@ -22,6 +22,7 @@ import json
 import os
 import threading
 import requests as http_requests
+import base64
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024   # 50 MB max upload
@@ -99,6 +100,7 @@ def scorecard():
 
 # ===== ANTHROPIC API PROXY =====
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')
 
 @app.route('/api/score', methods=['POST'])
 def api_score():
@@ -143,6 +145,109 @@ def api_score():
         return Response(response_body, status=resp.status_code,
                         content_type=resp.headers.get('Content-Type', 'application/json'))
     except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        return jsonify({'error': str(e)}), 500
+
+
+# ===== DROPBOX UPLOAD ENDPOINT =====
+@app.route('/api/dropbox-upload', methods=['POST'])
+def dropbox_upload():
+    """Upload a file to Dropbox in a structured folder hierarchy.
+
+    Request JSON body:
+    {
+        "filename": "document.pdf",
+        "fileData": "base64-encoded-file-data",
+        "propertyAddress": "123 Main St, San Francisco, CA",
+        "contentType": "application/pdf"
+    }
+    """
+    if not DROPBOX_ACCESS_TOKEN:
+        return jsonify({'error': 'Dropbox token not configured on server'}), 500
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body must be JSON'}), 400
+
+        filename = data.get('filename', '')
+        file_data_b64 = data.get('fileData', '')
+        property_address = data.get('propertyAddress', '')
+        content_type = data.get('contentType', 'application/octet-stream')
+
+        if not filename or not file_data_b64 or not property_address:
+            return jsonify({'error': 'Missing required fields: filename, fileData, propertyAddress'}), 400
+
+        # Decode base64 file data
+        try:
+            file_bytes = base64.b64decode(file_data_b64)
+        except Exception as e:
+            return jsonify({'error': f'Invalid base64 encoding: {str(e)}'}), 400
+
+        # Generate today's date in YYYY-MM-DD format
+        today = datetime.utcnow().strftime('%Y-%m-%d')
+
+        # Construct folder path
+        folder_path = f"/Stillport Team Folder/03_REAL ESTATE & ACQUISITIONS/01_Deal Pipeline/01_Active Prospects/{property_address} - {today}"
+        file_path = f"{folder_path}/{filename}"
+
+        # Step 1: Create folder (if it doesn't exist, we'll get a 409 which is fine)
+        headers_auth = {
+            'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
+            'Content-Type': 'application/json',
+        }
+
+        create_folder_body = json.dumps({
+            'path': folder_path,
+            'autorename': False
+        })
+
+        print(f"[dropbox-upload] Creating folder: {folder_path}", flush=True)
+        folder_resp = http_requests.post(
+            'https://api.dropboxapi.com/2/files/create_folder_v2',
+            headers=headers_auth,
+            data=create_folder_body,
+            timeout=30
+        )
+
+        # 409 means folder already exists, which is fine
+        if folder_resp.status_code not in [200, 409]:
+            print(f"[dropbox-upload] Folder creation error: {folder_resp.status_code} - {folder_resp.text}", flush=True)
+            return jsonify({'error': f'Failed to create folder: {folder_resp.status_code}'}), 500
+
+        # Step 2: Upload file
+        upload_headers = {
+            'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
+            'Dropbox-API-Arg': json.dumps({
+                'path': file_path,
+                'mode': 'overwrite'
+            }),
+            'Content-Type': 'application/octet-stream'
+        }
+
+        print(f"[dropbox-upload] Uploading file: {file_path} ({len(file_bytes):,} bytes)", flush=True)
+        upload_resp = http_requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers=upload_headers,
+            data=file_bytes,
+            timeout=60
+        )
+
+        if upload_resp.status_code != 200:
+            print(f"[dropbox-upload] Upload error: {upload_resp.status_code} - {upload_resp.text}", flush=True)
+            return jsonify({'error': f'Failed to upload file: {upload_resp.status_code}'}), 500
+
+        print(f"[dropbox-upload] Success: {filename} uploaded to {file_path}", flush=True)
+        return jsonify({
+            'success': True,
+            'message': f'File uploaded successfully to {file_path}',
+            'filename': filename,
+            'path': file_path
+        }), 200
+
+    except Exception as e:
+        import traceback, sys
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
         return jsonify({'error': str(e)}), 500
