@@ -2,4 +2,4 @@ flask
 flask-cors
 gunicorn
 requests
-xhtml2pdf
+fpdf2

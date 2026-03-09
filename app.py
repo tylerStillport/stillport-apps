@@ -24,7 +24,7 @@ import io
 import threading
 import requests as http_requests
 import base64
-from xhtml2pdf import pisa
+from fpdf import FPDF
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024   # 50 MB max upload
@@ -101,9 +101,17 @@ def scorecard():
 
 
 # ===== PDF GENERATION =====
+
+def hex_to_rgb(h):
+    """Convert hex colour like '#1B2A4A' to (r, g, b) tuple."""
+    h = h.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
 @app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
-    """Generate a Strategy Briefing PDF from structured data."""
+    """Generate a Strategy Briefing PDF from structured data using fpdf2."""
     try:
         data = request.get_json()
         if not data:
@@ -112,7 +120,7 @@ def generate_pdf():
         prop = data.get('property', {})
         dims = data.get('dimensions', [])
         sections = data.get('sections', [])
-        composite = data.get('compositeScore', '—')
+        composite = str(data.get('compositeScore', '—'))
         qual_label = data.get('qualLabel', '')
         tier_label = data.get('tierLabel', '')
         tier_color = data.get('tierColor', '#1B2A4A')
@@ -120,92 +128,161 @@ def generate_pdf():
         qual_color = data.get('qualColor', '#4CAF50')
         light_gold = data.get('lightGold', '#F5F0E1')
 
-        # Build dimension rows
-        dim_rows = ''
+        tc = hex_to_rgb(tier_color)
+        gc = hex_to_rgb(gold)
+        qc = hex_to_rgb(qual_color)
+        lgc = hex_to_rgb(light_gold)
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+        pw = pdf.w - pdf.l_margin - pdf.r_margin  # printable width
+
+        # ---- HEADER BAR ----
+        pdf.set_fill_color(*tc)
+        pdf.rect(pdf.l_margin, pdf.get_y(), pw, 28, 'F')
+        y_start = pdf.get_y()
+
+        # Title (left side)
+        pdf.set_xy(pdf.l_margin + 6, y_start + 4)
+        pdf.set_text_color(*gc)
+        pdf.set_font('Helvetica', 'B', 16)
+        pdf.cell(pw * 0.65, 7, 'Stillport Strategy Briefing', new_x='LMARGIN')
+        pdf.set_xy(pdf.l_margin + 6, y_start + 12)
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(200, 200, 200)
+        pdf.cell(pw * 0.65, 5, f'Real Estate Selection Scorecard  —  {tier_label}', new_x='LMARGIN')
+
+        # Score (right side)
+        pdf.set_xy(pdf.l_margin + pw * 0.65, y_start + 3)
+        pdf.set_text_color(*gc)
+        pdf.set_font('Helvetica', 'B', 26)
+        pdf.cell(pw * 0.35 - 6, 10, composite, align='R', new_x='LMARGIN')
+        pdf.set_xy(pdf.l_margin + pw * 0.65, y_start + 15)
+        pdf.set_text_color(*qc)
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.cell(pw * 0.35 - 6, 5, qual_label, align='R', new_x='LMARGIN')
+
+        pdf.set_y(y_start + 32)
+
+        # ---- PROPERTY INFO BOX ----
+        pdf.set_fill_color(249, 249, 249)
+        pdf.set_draw_color(220, 220, 220)
+        box_y = pdf.get_y()
+        box_h = 38
+        pdf.rect(pdf.l_margin, box_y, pw, box_h, 'DF')
+
+        label_color = (140, 140, 140)
+        value_color = (30, 30, 30)
+        col_w = pw / 2
+
+        info_rows = [
+            [('Property', prop.get('name', '—')),
+             ('Market', f"{prop.get('market', '—')} ({prop.get('marketComposite', '—')})")],
+            [('Building', f"{prop.get('buildingType', '—')}, {prop.get('totalSF', '—')} SF"),
+             ('Price', f"{prop.get('askingPrice', '—')} ({prop.get('priceSF', '—')}/SF)")],
+            [('Date Evaluated', prop.get('dateEvaluated', '—')),
+             ('Evaluator', prop.get('evaluator', '—'))],
+        ]
+
+        cy = box_y + 2
+        for row in info_rows:
+            for idx, (label, value) in enumerate(row):
+                x = pdf.l_margin + 4 + idx * col_w
+                pdf.set_xy(x, cy)
+                pdf.set_text_color(*label_color)
+                pdf.set_font('Helvetica', '', 7)
+                pdf.cell(col_w - 8, 4, label)
+                pdf.set_xy(x, cy + 4)
+                pdf.set_text_color(*value_color)
+                pdf.set_font('Helvetica', 'B', 9)
+                pdf.cell(col_w - 8, 4, value[:50])
+            cy += 12
+
+        pdf.set_y(box_y + box_h + 6)
+
+        # ---- DIMENSION SCORES TABLE ----
+        col_widths = [pw * 0.55, pw * 0.2, pw * 0.25]
+        headers = ['Dimension', 'Weight', 'Score']
+
+        # Header row
+        pdf.set_fill_color(*tc)
+        pdf.set_text_color(*gc)
+        pdf.set_font('Helvetica', 'B', 9)
+        for i, h in enumerate(headers):
+            align = 'L' if i == 0 else 'C'
+            pdf.cell(col_widths[i], 8, f'  {h}' if i == 0 else h, fill=True, align=align)
+        pdf.ln()
+
+        # Dimension rows
+        pdf.set_text_color(30, 30, 30)
+        pdf.set_font('Helvetica', '', 9)
         for d in dims:
-            dim_rows += f'''<tr>
-                <td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">{d.get('name','')}</td>
-                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">{d.get('weight','')}</td>
-                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:#1B2A4A">{d.get('score','—')}</td>
-            </tr>'''
+            pdf.set_draw_color(230, 230, 230)
+            y_before = pdf.get_y()
+            pdf.cell(col_widths[0], 7, f"  {d.get('name', '')}", border='B')
+            pdf.cell(col_widths[1], 7, d.get('weight', ''), border='B', align='C')
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_text_color(27, 42, 74)
+            pdf.cell(col_widths[2], 7, str(d.get('score', '—')), border='B', align='C')
+            pdf.ln()
+            pdf.set_font('Helvetica', '', 9)
+            pdf.set_text_color(30, 30, 30)
 
-        # Build sections
-        sections_html = ''
+        # Composite row
+        pdf.set_fill_color(*lgc)
+        pdf.set_text_color(27, 42, 74)
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(col_widths[0], 8, '  Composite', fill=True)
+        pdf.cell(col_widths[1], 8, '100%', fill=True, align='C')
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(col_widths[2], 8, composite, fill=True, align='C')
+        pdf.ln(12)
+
+        # ---- BRIEFING SECTIONS ----
         for s in sections:
-            sections_html += f'''<div style="margin-bottom:18px">
-                <h3 style="font-family:Georgia,serif;color:#1B2A4A;font-size:15px;margin:0 0 6px;border-bottom:2px solid {gold};padding-bottom:4px">{s.get('title','')}</h3>
-                <p style="font-size:13px;color:#333;line-height:1.6;margin:0">{s.get('content','')}</p>
-            </div>'''
+            # Check if we need a new page (at least 30mm needed)
+            if pdf.get_y() > pdf.h - 40:
+                pdf.add_page()
 
-        html = f'''<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto;padding:24px;color:#333">
+            title = s.get('title', '')
+            content = s.get('content', '')
 
-<table width="100%" cellpadding="0" cellspacing="0" style="background:{tier_color};border-radius:8px;margin-bottom:24px">
-<tr>
-  <td style="padding:28px 32px">
-    <span style="font-family:Georgia,serif;color:{gold};font-size:22px;font-weight:bold">Stillport Strategy Briefing</span><br/>
-    <span style="color:rgba(255,255,255,0.6);font-size:12px">Real Estate Selection Scorecard — {tier_label}</span>
-  </td>
-  <td style="padding:28px 32px;text-align:right;vertical-align:top">
-    <span style="font-family:Georgia,serif;color:{gold};font-size:36px;font-weight:700">{composite}</span><br/>
-    <span style="color:{qual_color};font-weight:700;font-size:16px">{qual_label}</span>
-  </td>
-</tr>
-</table>
+            pdf.set_text_color(27, 42, 74)
+            pdf.set_font('Helvetica', 'B', 11)
+            pdf.cell(pw, 7, title, new_x='LMARGIN', new_y='NEXT')
+            # Gold underline
+            pdf.set_draw_color(*gc)
+            pdf.set_line_width(0.5)
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + pw, pdf.get_y())
+            pdf.ln(3)
 
-<table width="100%" cellpadding="8" cellspacing="0" style="margin-bottom:24px;background:#f9f9f9;border:1px solid #eee;border-radius:8px">
-<tr>
-  <td style="width:50%"><span style="font-size:11px;color:#888">Property</span><br/><strong style="font-size:13px">{prop.get('name','—')}</strong></td>
-  <td style="width:50%"><span style="font-size:11px;color:#888">Market</span><br/><strong style="font-size:13px">{prop.get('market','—')} ({prop.get('marketComposite','—')})</strong></td>
-</tr>
-<tr>
-  <td><span style="font-size:11px;color:#888">Building</span><br/><strong style="font-size:13px">{prop.get('buildingType','—')}, {prop.get('totalSF','—')} SF</strong></td>
-  <td><span style="font-size:11px;color:#888">Price</span><br/><strong style="font-size:13px">{prop.get('askingPrice','—')} ({prop.get('priceSF','—')}/SF)</strong></td>
-</tr>
-<tr>
-  <td><span style="font-size:11px;color:#888">Date Evaluated</span><br/><strong style="font-size:13px">{prop.get('dateEvaluated','—')}</strong></td>
-  <td><span style="font-size:11px;color:#888">Evaluator</span><br/><strong style="font-size:13px">{prop.get('evaluator','—')}</strong></td>
-</tr>
-</table>
+            pdf.set_text_color(50, 50, 50)
+            pdf.set_font('Helvetica', '', 9)
+            pdf.multi_cell(pw, 5, content)
+            pdf.ln(5)
 
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;border:1px solid #eee">
-<tr style="background:{tier_color}">
-  <th style="padding:8px 12px;color:{gold};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
-  <th style="padding:8px 12px;color:{gold};text-align:center;font-size:12px">Weight</th>
-  <th style="padding:8px 12px;color:{gold};text-align:center;font-size:12px">Score</th>
-</tr>
-{dim_rows}
-<tr style="background:{light_gold}">
-  <td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:#1B2A4A">Composite</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:#1B2A4A">{composite}</td>
-</tr>
-</table>
+        # ---- FOOTER ----
+        pdf.ln(6)
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + pw, pdf.get_y())
+        pdf.ln(3)
+        pdf.set_text_color(180, 180, 180)
+        pdf.set_font('Helvetica', '', 7)
+        pdf.cell(pw, 5, f"Stillport RE Selection Scorecard  —  {tier_label}  —  Generated {datetime.utcnow().strftime('%m/%d/%Y')}", align='C')
 
-{sections_html}
-
-<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
-  Stillport RE Selection Scorecard — {tier_label} — Generated {datetime.utcnow().strftime('%m/%d/%Y')}
-</div>
-
-</body></html>'''
-
-        # Convert HTML to PDF
-        pdf_buffer = io.BytesIO()
-        pisa_status = pisa.CreatePDF(io.StringIO(html), dest=pdf_buffer)
-        if pisa_status.err:
-            return jsonify({'error': 'PDF generation failed'}), 500
-
-        pdf_buffer.seek(0)
+        # Output
+        pdf_bytes = pdf.output()
         return Response(
-            pdf_buffer.read(),
+            pdf_bytes,
             mimetype='application/pdf',
             headers={'Content-Disposition': 'inline; filename=strategy_briefing.pdf'}
         )
     except Exception as e:
         print(f"[generate-pdf] Error: {str(e)}", flush=True)
+        import traceback, sys
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
         return jsonify({'error': str(e)}), 500
 
 
