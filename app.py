@@ -231,7 +231,7 @@ def dropbox_upload():
         today = datetime.utcnow().strftime('%Y-%m-%d')
 
         # Construct folder path
-        folder_path = f"/Stillport Team Folder/03_REAL ESTATE & ACQUISITIONS/01_Deal Pipeline/01_Active Prospects/{property_address} - {today}"
+        folder_path = f"/Stillport Team Folder/03_REAL ESTATE & ACQUISITIONS/01_Deal Pipeline/01_Active Prospects/1_ Early Prospects Scorecards/{property_address} - {today}"
         file_path = f"{folder_path}/{filename}"
 
         # Step 1: Create folder (if it doesn't exist, we'll get a 409 which is fine)
