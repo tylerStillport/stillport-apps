@@ -109,6 +109,24 @@ def hex_to_rgb(h):
         h = ''.join(c * 2 for c in h)
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
+def sanitize(text):
+    """Replace Unicode chars that fpdf2 built-in fonts can't render."""
+    if not isinstance(text, str):
+        text = str(text)
+    return (text
+        .replace('\u2014', '--')   # em dash
+        .replace('\u2013', '-')    # en dash
+        .replace('\u2018', "'")    # left single quote
+        .replace('\u2019', "'")    # right single quote
+        .replace('\u201c', '"')    # left double quote
+        .replace('\u201d', '"')    # right double quote
+        .replace('\u2026', '...')  # ellipsis
+        .replace('\u2022', '-')    # bullet
+        .replace('\u00a0', ' ')    # non-breaking space
+        .replace('\u2012', '-')    # figure dash
+        .replace('\u2015', '--')   # horizontal bar
+    )
+
 @app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
     """Generate a Strategy Briefing PDF from structured data using fpdf2."""
@@ -120,9 +138,9 @@ def generate_pdf():
         prop = data.get('property', {})
         dims = data.get('dimensions', [])
         sections = data.get('sections', [])
-        composite = str(data.get('compositeScore', '—'))
-        qual_label = data.get('qualLabel', '')
-        tier_label = data.get('tierLabel', '')
+        composite = sanitize(str(data.get('compositeScore', '--')))
+        qual_label = sanitize(data.get('qualLabel', ''))
+        tier_label = sanitize(data.get('tierLabel', ''))
         tier_color = data.get('tierColor', '#1B2A4A')
         gold = data.get('gold', '#C9A84C')
         qual_color = data.get('qualColor', '#4CAF50')
@@ -151,7 +169,7 @@ def generate_pdf():
         pdf.set_xy(pdf.l_margin + 6, y_start + 12)
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(200, 200, 200)
-        pdf.cell(pw * 0.65, 5, f'Real Estate Selection Scorecard  —  {tier_label}', new_x='LMARGIN')
+        pdf.cell(pw * 0.65, 5, f'Real Estate Selection Scorecard -- {tier_label}', new_x='LMARGIN')
 
         # Score (right side)
         pdf.set_xy(pdf.l_margin + pw * 0.65, y_start + 3)
@@ -177,12 +195,12 @@ def generate_pdf():
         col_w = pw / 2
 
         info_rows = [
-            [('Property', prop.get('name', '—')),
-             ('Market', f"{prop.get('market', '—')} ({prop.get('marketComposite', '—')})")],
-            [('Building', f"{prop.get('buildingType', '—')}, {prop.get('totalSF', '—')} SF"),
-             ('Price', f"{prop.get('askingPrice', '—')} ({prop.get('priceSF', '—')}/SF)")],
-            [('Date Evaluated', prop.get('dateEvaluated', '—')),
-             ('Evaluator', prop.get('evaluator', '—'))],
+            [('Property', sanitize(prop.get('name', '--'))),
+             ('Market', sanitize(f"{prop.get('market', '--')} ({prop.get('marketComposite', '--')})"))],
+            [('Building', sanitize(f"{prop.get('buildingType', '--')}, {prop.get('totalSF', '--')} SF")),
+             ('Price', sanitize(f"{prop.get('askingPrice', '--')} ({prop.get('priceSF', '--')}/SF)"))],
+            [('Date Evaluated', sanitize(prop.get('dateEvaluated', '--'))),
+             ('Evaluator', sanitize(prop.get('evaluator', '--')))],
         ]
 
         cy = box_y + 2
@@ -220,11 +238,11 @@ def generate_pdf():
         for d in dims:
             pdf.set_draw_color(230, 230, 230)
             y_before = pdf.get_y()
-            pdf.cell(col_widths[0], 7, f"  {d.get('name', '')}", border='B')
-            pdf.cell(col_widths[1], 7, d.get('weight', ''), border='B', align='C')
+            pdf.cell(col_widths[0], 7, sanitize(f"  {d.get('name', '')}"), border='B')
+            pdf.cell(col_widths[1], 7, sanitize(d.get('weight', '')), border='B', align='C')
             pdf.set_font('Helvetica', 'B', 9)
             pdf.set_text_color(27, 42, 74)
-            pdf.cell(col_widths[2], 7, str(d.get('score', '—')), border='B', align='C')
+            pdf.cell(col_widths[2], 7, sanitize(str(d.get('score', '--'))), border='B', align='C')
             pdf.ln()
             pdf.set_font('Helvetica', '', 9)
             pdf.set_text_color(30, 30, 30)
@@ -245,8 +263,8 @@ def generate_pdf():
             if pdf.get_y() > pdf.h - 40:
                 pdf.add_page()
 
-            title = s.get('title', '')
-            content = s.get('content', '')
+            title = sanitize(s.get('title', ''))
+            content = sanitize(s.get('content', ''))
 
             pdf.set_text_color(27, 42, 74)
             pdf.set_font('Helvetica', 'B', 11)
@@ -269,7 +287,7 @@ def generate_pdf():
         pdf.ln(3)
         pdf.set_text_color(180, 180, 180)
         pdf.set_font('Helvetica', '', 7)
-        pdf.cell(pw, 5, f"Stillport RE Selection Scorecard  —  {tier_label}  —  Generated {datetime.utcnow().strftime('%m/%d/%Y')}", align='C')
+        pdf.cell(pw, 5, f"Stillport RE Selection Scorecard -- {tier_label} -- Generated {datetime.utcnow().strftime('%m/%d/%Y')}", align='C')
 
         # Output
         pdf_bytes = pdf.output()
