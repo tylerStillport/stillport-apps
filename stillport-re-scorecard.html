@@ -777,6 +777,8 @@ window.StillportREScorecard = function StillportREScorecard() {
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [marketManuallySet, setMarketManuallySet] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [uploadingDropbox, setUploadingDropbox] = useState(false);
+  const [dropboxStatus, setDropboxStatus] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [savedFiles, setSavedFiles] = useState([]);
   const [showLoadPanel, setShowLoadPanel] = useState(false);
@@ -809,6 +811,190 @@ window.StillportREScorecard = function StillportREScorecard() {
       }
     } catch (err) {
       console.warn("Dropbox upload error:", err);
+    }
+  };
+
+  // ─── Upload Both Docs to Dropbox ───
+  const uploadBothToDropbox = async () => {
+    setUploadingDropbox(true);
+    setDropboxStatus("Preparing files...");
+    try {
+      // 1) Generate Excel blob
+      if (typeof XLSX === "undefined") { alert("Excel library failed to load. Please refresh."); return; }
+      const wb = XLSX.utils.book_new();
+      const summaryRows = [
+        ["STILLPORT RE SELECTION SCORECARD"], [`Tier: ${config.label}`], [],
+        ["PROPERTY INFORMATION"],
+        ["Property Name / Address", propertyInfo.name || "\u2014"],
+        ["Market", propertyInfo.market || "\u2014"],
+        ["Market Composite Score", propertyInfo.marketComposite || "\u2014"],
+        ["Building Type", propertyInfo.buildingType || "\u2014"],
+        ["Total SF", propertyInfo.totalSF || "\u2014"],
+        ["Year Built", propertyInfo.yearBuilt || "\u2014"],
+        ["Asking Price", propertyInfo.askingPrice || "\u2014"],
+        ["Price per SF", propertyInfo.priceSF || "\u2014"],
+        ["Date Evaluated", propertyInfo.dateEvaluated || "\u2014"],
+        ["Evaluator", propertyInfo.evaluator || "\u2014"],
+        [],
+      ];
+      if (SF_RANGES[tier]) {
+        summaryRows.push(["SF RANGE GATE", sfGateResult ? (sfGateResult.pass ? "PASS" : "FAIL") : "N/A"]);
+        if (sfGateResult) summaryRows.push(["", sfGateResult.reason]);
+      } else {
+        summaryRows.push(["SF RANGE GATE", `Not applicable for ${config.label}`]);
+      }
+      summaryRows.push([], ["SCORING DIMENSIONS"], ["Dimension", "Weight", "Average", "Weighted"]);
+      dimensions.forEach((dim, i) => {
+        summaryRows.push([dim.name, `${Math.round(dim.weight * 100)}%`, dimAverages[i] != null ? Number(dimAverages[i].toFixed(2)) : "\u2014", weightedComponents[i] != null ? Number(weightedComponents[i].toFixed(3)) : "\u2014"]);
+      });
+      summaryRows.push([], ["WEIGHTED COMPOSITE SCORE", compositeScore != null ? Number(compositeScore.toFixed(2)) : "\u2014"],
+        ["QUALIFICATION", tierResult.label], [`Prime: ${config.prime}+ | Strong: ${config.strong}+ | Viable: ${config.viable}+`],
+        [], ["NOTES"], [notes || "\u2014"]);
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+      ws1["!cols"] = [{ wch: 36 }, { wch: 18 }, { wch: 12 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+      const detailRows = [["DETAILED SCORING \u2014 " + config.label], [], ["Dimension", "Criterion", "Score (1-5)", "Source", "Reasoning"]];
+      dimensions.forEach((dim) => {
+        dim.criteria.forEach((crit) => {
+          const score = scores[crit.id]; const src = scoreSources[crit.id];
+          detailRows.push([dim.name, crit.label, score != null ? score : "\u2014", src ? `AI (${src.docName})` : score != null ? "Manual" : "\u2014", src ? src.reasoning : ""]);
+        });
+      });
+      const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
+      ws2["!cols"] = [{ wch: 28 }, { wch: 32 }, { wch: 12 }, { wch: 24 }, { wch: 60 }];
+      XLSX.utils.book_append_sheet(wb, ws2, "Detailed Scores");
+      if (uploadedDocs.length > 0) {
+        const docRows = [["DOCUMENTS ANALYZED"], [], ["File Name", "Type", "Criteria Filled", "Time", "Notes"]];
+        uploadedDocs.forEach((doc) => docRows.push([doc.fileName, doc.docLabel, doc.criteriaFilled, doc.timestamp, doc.notes || ""]));
+        const ws3 = XLSX.utils.aoa_to_sheet(docRows);
+        ws3["!cols"] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(wb, ws3, "Documents");
+      }
+      const addrSlug = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
+      const scoreStr = compositeScore != null ? compositeScore.toFixed(2) : "unscored";
+      const excelFilename = `${addrSlug}_Scorecard_${scoreStr}.xlsx`;
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const excelBlob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      // 2) Generate Strategy Briefing HTML blob
+      setDropboxStatus("Generating strategy briefing...");
+      const dimSummary = dimensions.map((dim, i) => {
+        const critDetail = dim.criteria.map((c) => {
+          const s = scores[c.id]; const src = scoreSources[c.id];
+          return `  - ${c.label}: ${s != null ? `${s}/5` : "not scored"}${src ? ` (${src.reasoning})` : ""}`;
+        }).join("\n");
+        return `${dim.name} (${Math.round(dim.weight * 100)}%): avg ${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "N/A"}\n${critDetail}`;
+      }).join("\n\n");
+
+      const briefingPrompt = `You are a senior real estate analyst at Stillport, a premium bathhouse concept. Generate a professional Strategy Briefing.
+
+PROPERTY: ${propertyInfo.name || "Unknown"}
+MARKET: ${propertyInfo.market || "Unknown"} (Market Composite: ${propertyInfo.marketComposite || "N/A"})
+TIER: ${config.label}
+BUILDING: ${propertyInfo.buildingType || "N/A"}, ${propertyInfo.totalSF || "N/A"} SF, Built ${propertyInfo.yearBuilt || "N/A"}
+PRICE: ${propertyInfo.askingPrice || "N/A"} (${propertyInfo.priceSF || "N/A"}/SF)
+DATE: ${propertyInfo.dateEvaluated || "N/A"}
+EVALUATOR: ${propertyInfo.evaluator || "N/A"}
+
+COMPOSITE SCORE: ${compositeScore != null ? compositeScore.toFixed(2) : "N/A"} \u2014 ${tierResult.label}
+(Prime: ${config.prime}+ | Strong: ${config.strong}+ | Viable: ${config.viable}+)
+${!allDimsScored ? `Note: ${scoredDimCount}/${dimensions.length} dimensions scored (preliminary)` : ""}
+
+SF RANGE GATE: ${!SF_RANGES[tier] ? `Not applicable for ${config.label}` : sfGateResult ? `${sfGateResult.pass ? "PASS" : "FAIL"} \u2014 ${sfGateResult.reason}` : "Not evaluated"}
+
+DIMENSION SCORES:
+${dimSummary}
+
+EVALUATOR NOTES: ${notes || "None"}
+
+DOCUMENTS ANALYZED: ${uploadedDocs.length > 0 ? uploadedDocs.map((d) => `${d.docLabel}: ${d.fileName}`).join("; ") : "None"}
+
+Write a professional strategy briefing with these sections:
+1. EXECUTIVE SUMMARY (2-3 sentences)
+2. MARKET CONTEXT
+3. STRENGTHS (top scoring dimensions/criteria)
+4. RISK FACTORS (lowest scoring)
+5. CRITICAL INFRASTRUCTURE
+6. ACQUISITION ECONOMICS ASSESSMENT
+7. RECOMMENDATION (go/no-go with conditions)
+
+Return ONLY valid JSON with no markdown formatting or code fences: { "sections": [ { "title": "string", "content": "string" } ] }
+Important: Do not use newlines or special characters inside JSON string values. Keep each section to 2-4 sentences. Be specific and reference actual scores.`;
+
+      const response = await fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 3000, messages: [{ role: "user", content: briefingPrompt }] }),
+      });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      const rawText = data.content[0].text;
+      let briefing;
+      try { briefing = JSON.parse(rawText); } catch (e1) {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("Could not parse briefing response");
+        try { briefing = JSON.parse(jsonMatch[0]); } catch (e2) {
+          let cleaned = jsonMatch[0].replace(/[\x00-\x1f]/g, (ch) => ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : '').replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+          briefing = JSON.parse(cleaned);
+        }
+      }
+      if (!briefing.sections) throw new Error("Response missing sections");
+
+      const tierColor = tier === "T1" ? DARK : T2_ACCENT;
+      const qualColor = tierResult.color;
+      const dimTable = dimensions.map((dim, i) =>
+        `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${dim.name}</td>
+         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${Math.round(dim.weight * 100)}%</td>
+         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:${DARK}">${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014"}</td></tr>`
+      ).join("");
+      const sectionsHtml = briefing.sections.map((s) =>
+        `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
+      ).join("");
+      const briefHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Strategy Briefing \u2014 ${propertyInfo.name || "Property"}</title>
+<style>@media print{body{margin:0.5in}@page{size:letter;margin:0.6in}}</style></head>
+<body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;color:#333">
+<div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
+      <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:4px 0 0">Real Estate Selection Scorecard \u2014 ${config.label}</p></div>
+    <div style="text-align:right">
+      <div style="font-family:Georgia,serif;color:${GOLD};font-size:36px;font-weight:700">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</div>
+      <div style="color:${qualColor};font-weight:700;font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,0.3)">${tierResult.label}</div></div>
+  </div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:24px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #eee">
+  <div><span style="font-size:11px;color:#888">Property</span><br><strong style="font-size:13px">${propertyInfo.name || "\u2014"}</strong></div>
+  <div><span style="font-size:11px;color:#888">Market</span><br><strong style="font-size:13px">${propertyInfo.market || "\u2014"} (${propertyInfo.marketComposite || "\u2014"})</strong></div>
+  <div><span style="font-size:11px;color:#888">Building</span><br><strong style="font-size:13px">${propertyInfo.buildingType || "\u2014"}, ${propertyInfo.totalSF || "\u2014"} SF</strong></div>
+  <div><span style="font-size:11px;color:#888">Price</span><br><strong style="font-size:13px">${propertyInfo.askingPrice || "\u2014"} (${propertyInfo.priceSF || "\u2014"}/SF)</strong></div>
+  <div><span style="font-size:11px;color:#888">Date Evaluated</span><br><strong style="font-size:13px">${propertyInfo.dateEvaluated || "\u2014"}</strong></div>
+  <div><span style="font-size:11px;color:#888">Evaluator</span><br><strong style="font-size:13px">${propertyInfo.evaluator || "\u2014"}</strong></div></div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:24px;border:1px solid #eee;border-radius:6px;overflow:hidden">
+  <tr style="background:${tierColor}"><th style="padding:8px 12px;color:${GOLD};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
+  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Weight</th>
+  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Score</th></tr>
+  ${dimTable}
+  <tr style="background:${LIGHT_GOLD}"><td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:${DARK}">Composite</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
+${sectionsHtml}
+<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
+  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></body></html>`;
+      const briefBlob = new Blob([briefHtml], { type: "text/html" });
+      const briefFilename = `${addrSlug}_Strategy_Briefing.html`;
+
+      // 3) Upload both to Dropbox
+      setDropboxStatus("Uploading scorecard to Dropbox...");
+      await uploadToDropbox(excelBlob, excelFilename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      setDropboxStatus("Uploading strategy briefing to Dropbox...");
+      await uploadToDropbox(briefBlob, briefFilename, "text/html");
+      setDropboxStatus("Uploaded to Dropbox!");
+      setTimeout(() => setDropboxStatus(""), 4000);
+    } catch (err) {
+      console.error("Dropbox upload error:", err);
+      setDropboxStatus("Upload failed: " + err.message);
+      setTimeout(() => setDropboxStatus(""), 5000);
+    } finally {
+      setUploadingDropbox(false);
     }
   };
 
@@ -1051,8 +1237,7 @@ window.StillportREScorecard = function StillportREScorecard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
-    // Auto-upload to Dropbox
-    uploadToDropbox(blob, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    // Upload now handled by dedicated "Upload Both Docs to Dropbox" button
     } catch (err) { alert(`Error downloading Excel: ${err.message}`); console.error("Excel download error:", err); }
   };
 
@@ -1176,10 +1361,7 @@ ${sectionsHtml}
       const win = window.open(url, "_blank");
       if (win) { win.onload = () => setTimeout(() => win.print(), 500); }
       URL.revokeObjectURL(url);
-      // Auto-upload Strategy Briefing to Dropbox
-      const briefAddrSlug = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
-      const briefFilename = `${briefAddrSlug}_Strategy_Briefing.html`;
-      uploadToDropbox(blob, briefFilename, "text/html");
+      // Upload now handled by dedicated "Upload Both Docs to Dropbox" button
     } catch (err) { alert(`Error generating briefing: ${err.message}`); }
     finally { setGeneratingPdf(false); }
   };
@@ -1504,6 +1686,30 @@ ${sectionsHtml}
               opacity: generatingPdf ? 0.7 : 1 }}>
             {generatingPdf ? "Generating Briefing..." : "Download Strategy Briefing (.pdf)"}
           </button>
+        </div>
+      )}
+      {compositeScore != null && (
+        <div style={{ marginBottom: 16 }}>
+          <button onClick={uploadBothToDropbox} disabled={uploadingDropbox}
+            style={{ width: "100%", padding: "14px 20px", borderRadius: 8, border: "none", cursor: uploadingDropbox ? "wait" : "pointer",
+              background: "#0061FF", color: "#fff",
+              fontSize: 14, fontWeight: 600, fontFamily: "Georgia, serif",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              opacity: uploadingDropbox ? 0.7 : 1, transition: "opacity 0.2s" }}>
+            <svg width="20" height="20" viewBox="0 0 43 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.5 0L0 8.1l8.7 7 12.8-8.1L12.5 0z" fill="#fff"/>
+              <path d="M0 22.2l12.5 8.1 9-7-12.8-8.1L0 22.2z" fill="#fff"/>
+              <path d="M21.5 23.3l9 7 12.5-8.1-8.7-7-12.8 8.1z" fill="#fff"/>
+              <path d="M43 8.1L30.5 0l-9 7 12.8 8.1L43 8.1z" fill="#fff"/>
+              <path d="M21.5 25.2l-9 7-3.5-2.3v2.6l12.5 7.5 12.5-7.5v-2.6l-3.5 2.3-9-7z" fill="#fff"/>
+            </svg>
+            {uploadingDropbox ? (dropboxStatus || "Uploading...") : "Upload Both Docs to Dropbox"}
+          </button>
+          {dropboxStatus && !uploadingDropbox && (
+            <div style={{ textAlign: "center", marginTop: 6, fontSize: 12, color: dropboxStatus.startsWith("Upload failed") ? "#c0392b" : "#27ae60", fontWeight: 600 }}>
+              {dropboxStatus}
+            </div>
+          )}
         </div>
       )}
 
