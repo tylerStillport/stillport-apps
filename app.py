@@ -105,6 +105,7 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 DROPBOX_REFRESH_TOKEN = os.environ.get('DROPBOX_REFRESH_TOKEN', '')
 DROPBOX_APP_KEY = os.environ.get('DROPBOX_APP_KEY', '')
 DROPBOX_APP_SECRET = os.environ.get('DROPBOX_APP_SECRET', '')
+DROPBOX_ROOT_NAMESPACE = os.environ.get('DROPBOX_ROOT_NAMESPACE', '13775737299')  # Stillport team root
 # Cache for the short-lived access token
 _dropbox_token_cache = {'token': '', 'expires_at': 0}
 
@@ -234,9 +235,12 @@ def dropbox_upload():
         file_path = f"{folder_path}/{filename}"
 
         # Step 1: Create folder (if it doesn't exist, we'll get a 409 which is fine)
+        # Use Dropbox-API-Path-Root to target the team root namespace (not member folder)
+        path_root_header = json.dumps({".tag": "root", "root": DROPBOX_ROOT_NAMESPACE})
         headers_auth = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
+            'Dropbox-API-Path-Root': path_root_header,
         }
 
         create_folder_body = json.dumps({
@@ -264,7 +268,8 @@ def dropbox_upload():
                 'path': file_path,
                 'mode': 'overwrite'
             }),
-            'Content-Type': 'application/octet-stream'
+            'Content-Type': 'application/octet-stream',
+            'Dropbox-API-Path-Root': path_root_header,
         }
 
         print(f"[dropbox-upload] Uploading file: {file_path} ({len(file_bytes):,} bytes)", flush=True)
