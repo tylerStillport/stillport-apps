@@ -20,9 +20,11 @@ from flask_cors import CORS
 from datetime import datetime
 import json
 import os
+import io
 import threading
 import requests as http_requests
 import base64
+from xhtml2pdf import pisa
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024   # 50 MB max upload
@@ -96,6 +98,115 @@ def outreach():
 @app.route('/scorecard')
 def scorecard():
     return send_file(os.path.join(APP_DIR, 'stillport-re-scorecard.html'))
+
+
+# ===== PDF GENERATION =====
+@app.route('/api/generate-pdf', methods=['POST'])
+def generate_pdf():
+    """Generate a Strategy Briefing PDF from structured data."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing JSON body'}), 400
+
+        prop = data.get('property', {})
+        dims = data.get('dimensions', [])
+        sections = data.get('sections', [])
+        composite = data.get('compositeScore', '—')
+        qual_label = data.get('qualLabel', '')
+        tier_label = data.get('tierLabel', '')
+        tier_color = data.get('tierColor', '#1B2A4A')
+        gold = data.get('gold', '#C9A84C')
+        qual_color = data.get('qualColor', '#4CAF50')
+        light_gold = data.get('lightGold', '#F5F0E1')
+
+        # Build dimension rows
+        dim_rows = ''
+        for d in dims:
+            dim_rows += f'''<tr>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">{d.get('name','')}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">{d.get('weight','')}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:#1B2A4A">{d.get('score','—')}</td>
+            </tr>'''
+
+        # Build sections
+        sections_html = ''
+        for s in sections:
+            sections_html += f'''<div style="margin-bottom:18px">
+                <h3 style="font-family:Georgia,serif;color:#1B2A4A;font-size:15px;margin:0 0 6px;border-bottom:2px solid {gold};padding-bottom:4px">{s.get('title','')}</h3>
+                <p style="font-size:13px;color:#333;line-height:1.6;margin:0">{s.get('content','')}</p>
+            </div>'''
+
+        html = f'''<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto;padding:24px;color:#333">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:{tier_color};border-radius:8px;margin-bottom:24px">
+<tr>
+  <td style="padding:28px 32px">
+    <span style="font-family:Georgia,serif;color:{gold};font-size:22px;font-weight:bold">Stillport Strategy Briefing</span><br/>
+    <span style="color:rgba(255,255,255,0.6);font-size:12px">Real Estate Selection Scorecard — {tier_label}</span>
+  </td>
+  <td style="padding:28px 32px;text-align:right;vertical-align:top">
+    <span style="font-family:Georgia,serif;color:{gold};font-size:36px;font-weight:700">{composite}</span><br/>
+    <span style="color:{qual_color};font-weight:700;font-size:16px">{qual_label}</span>
+  </td>
+</tr>
+</table>
+
+<table width="100%" cellpadding="8" cellspacing="0" style="margin-bottom:24px;background:#f9f9f9;border:1px solid #eee;border-radius:8px">
+<tr>
+  <td style="width:50%"><span style="font-size:11px;color:#888">Property</span><br/><strong style="font-size:13px">{prop.get('name','—')}</strong></td>
+  <td style="width:50%"><span style="font-size:11px;color:#888">Market</span><br/><strong style="font-size:13px">{prop.get('market','—')} ({prop.get('marketComposite','—')})</strong></td>
+</tr>
+<tr>
+  <td><span style="font-size:11px;color:#888">Building</span><br/><strong style="font-size:13px">{prop.get('buildingType','—')}, {prop.get('totalSF','—')} SF</strong></td>
+  <td><span style="font-size:11px;color:#888">Price</span><br/><strong style="font-size:13px">{prop.get('askingPrice','—')} ({prop.get('priceSF','—')}/SF)</strong></td>
+</tr>
+<tr>
+  <td><span style="font-size:11px;color:#888">Date Evaluated</span><br/><strong style="font-size:13px">{prop.get('dateEvaluated','—')}</strong></td>
+  <td><span style="font-size:11px;color:#888">Evaluator</span><br/><strong style="font-size:13px">{prop.get('evaluator','—')}</strong></td>
+</tr>
+</table>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;border:1px solid #eee">
+<tr style="background:{tier_color}">
+  <th style="padding:8px 12px;color:{gold};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
+  <th style="padding:8px 12px;color:{gold};text-align:center;font-size:12px">Weight</th>
+  <th style="padding:8px 12px;color:{gold};text-align:center;font-size:12px">Score</th>
+</tr>
+{dim_rows}
+<tr style="background:{light_gold}">
+  <td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:#1B2A4A">Composite</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
+  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:#1B2A4A">{composite}</td>
+</tr>
+</table>
+
+{sections_html}
+
+<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
+  Stillport RE Selection Scorecard — {tier_label} — Generated {datetime.utcnow().strftime('%m/%d/%Y')}
+</div>
+
+</body></html>'''
+
+        # Convert HTML to PDF
+        pdf_buffer = io.BytesIO()
+        pisa_status = pisa.CreatePDF(io.StringIO(html), dest=pdf_buffer)
+        if pisa_status.err:
+            return jsonify({'error': 'PDF generation failed'}), 500
+
+        pdf_buffer.seek(0)
+        return Response(
+            pdf_buffer.read(),
+            mimetype='application/pdf',
+            headers={'Content-Disposition': 'inline; filename=strategy_briefing.pdf'}
+        )
+    except Exception as e:
+        print(f"[generate-pdf] Error: {str(e)}", flush=True)
+        return jsonify({'error': str(e)}), 500
 
 
 # ===== ANTHROPIC API PROXY =====

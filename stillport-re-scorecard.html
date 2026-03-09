@@ -9,7 +9,6 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; background: #FAFAFA; min-height: 100vh; }
@@ -941,60 +940,31 @@ Important: Do not use newlines or special characters inside JSON string values. 
       }
       if (!briefing.sections) throw new Error("Response missing sections");
 
-      const tierColor = tier === "T1" ? DARK : T2_ACCENT;
-      const qualColor = tierResult.color;
-      const dimTable = dimensions.map((dim, i) =>
-        `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${dim.name}</td>
-         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${Math.round(dim.weight * 100)}%</td>
-         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:${DARK}">${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014"}</td></tr>`
-      ).join("");
-      const sectionsHtml = briefing.sections.map((s) =>
-        `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
-      ).join("");
-      const briefBodyContent = `<div style="font-family:Arial,sans-serif;max-width:800px;padding:24px;color:#333">
-<div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
-    <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
-      <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:4px 0 0">Real Estate Selection Scorecard \u2014 ${config.label}</p></div>
-    <div style="text-align:right">
-      <div style="font-family:Georgia,serif;color:${GOLD};font-size:36px;font-weight:700">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</div>
-      <div style="color:${qualColor};font-weight:700;font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,0.3)">${tierResult.label}</div></div>
-  </div></div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:24px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #eee">
-  <div><span style="font-size:11px;color:#888">Property</span><br><strong style="font-size:13px">${propertyInfo.name || "\u2014"}</strong></div>
-  <div><span style="font-size:11px;color:#888">Market</span><br><strong style="font-size:13px">${propertyInfo.market || "\u2014"} (${propertyInfo.marketComposite || "\u2014"})</strong></div>
-  <div><span style="font-size:11px;color:#888">Building</span><br><strong style="font-size:13px">${propertyInfo.buildingType || "\u2014"}, ${propertyInfo.totalSF || "\u2014"} SF</strong></div>
-  <div><span style="font-size:11px;color:#888">Price</span><br><strong style="font-size:13px">${propertyInfo.askingPrice || "\u2014"} (${propertyInfo.priceSF || "\u2014"}/SF)</strong></div>
-  <div><span style="font-size:11px;color:#888">Date Evaluated</span><br><strong style="font-size:13px">${propertyInfo.dateEvaluated || "\u2014"}</strong></div>
-  <div><span style="font-size:11px;color:#888">Evaluator</span><br><strong style="font-size:13px">${propertyInfo.evaluator || "\u2014"}</strong></div></div>
-<table style="width:100%;border-collapse:collapse;margin-bottom:24px;border:1px solid #eee;border-radius:6px;overflow:hidden">
-  <tr style="background:${tierColor}"><th style="padding:8px 12px;color:${GOLD};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
-  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Weight</th>
-  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Score</th></tr>
-  ${dimTable}
-  <tr style="background:${LIGHT_GOLD}"><td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:${DARK}">Composite</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
-${sectionsHtml}
-<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
-  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
-      // Convert briefing HTML to PDF via html2pdf
-      setDropboxStatus("Converting briefing to PDF...");
-      const dbxContainer = document.createElement("div");
-      dbxContainer.innerHTML = briefBodyContent;
-      dbxContainer.style.width = "800px";
-      dbxContainer.style.background = "white";
-      dbxContainer.style.position = "absolute";
-      dbxContainer.style.left = "0";
-      dbxContainer.style.top = "0";
-      document.body.appendChild(dbxContainer);
-      const pdfBlob = await html2pdf().set({
-        margin: [0.5, 0.6, 0.5, 0.6],
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      }).from(dbxContainer).outputPdf("blob");
-      document.body.removeChild(dbxContainer);
+      // Generate PDF server-side
+      setDropboxStatus("Generating PDF briefing...");
+      const pdfPayload = {
+        property: propertyInfo,
+        dimensions: dimensions.map((dim, i) => ({
+          name: dim.name,
+          weight: Math.round(dim.weight * 100) + "%",
+          score: dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014",
+        })),
+        sections: briefing.sections,
+        compositeScore: compositeScore != null ? compositeScore.toFixed(2) : "\u2014",
+        qualLabel: tierResult.label,
+        tierLabel: config.label,
+        tierColor: tier === "T1" ? DARK : T2_ACCENT,
+        gold: GOLD,
+        qualColor: tierResult.color,
+        lightGold: LIGHT_GOLD,
+      };
+      const pdfResp = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pdfPayload),
+      });
+      if (!pdfResp.ok) throw new Error(`PDF generation failed: ${pdfResp.status}`);
+      const pdfBlob = await pdfResp.blob();
       const briefFilename = `${addrSlug}_Strategy_Briefing.pdf`;
 
       // 3) Upload both to Dropbox
@@ -1330,64 +1300,38 @@ Important: Do not use newlines or special characters inside JSON string values. 
       }
       if (!briefing.sections) throw new Error("Response missing sections");
 
-      const tierColor = tier === "T1" ? DARK : T2_ACCENT;
-      const qualColor = tierResult.color;
-      const dimTable = dimensions.map((dim, i) =>
-        `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${dim.name}</td>
-         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${Math.round(dim.weight * 100)}%</td>
-         <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;font-size:13px;color:${DARK}">${dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014"}</td></tr>`
-      ).join("");
-      const sectionsHtml = briefing.sections.map((s) =>
-        `<div style="margin-bottom:18px"><h3 style="font-family:Georgia,serif;color:${DARK};font-size:15px;margin:0 0 6px;border-bottom:2px solid ${GOLD};padding-bottom:4px">${s.title}</h3><p style="font-size:13px;color:#333;line-height:1.6;margin:0">${s.content}</p></div>`
-      ).join("");
-
-      const bodyContent = `<div style="font-family:Arial,sans-serif;max-width:800px;padding:24px;color:#333">
-<div style="background:${tierColor};padding:28px 32px;border-radius:8px;margin-bottom:24px">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
-    <div><h1 style="font-family:Georgia,serif;color:${GOLD};font-size:22px;margin:0">Stillport Strategy Briefing</h1>
-      <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:4px 0 0">Real Estate Selection Scorecard \u2014 ${config.label}</p></div>
-    <div style="text-align:right">
-      <div style="font-family:Georgia,serif;color:${GOLD};font-size:36px;font-weight:700">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</div>
-      <div style="color:${qualColor};font-weight:700;font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,0.3)">${tierResult.label}</div></div>
-  </div></div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:24px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #eee">
-  <div><span style="font-size:11px;color:#888">Property</span><br><strong style="font-size:13px">${propertyInfo.name || "\u2014"}</strong></div>
-  <div><span style="font-size:11px;color:#888">Market</span><br><strong style="font-size:13px">${propertyInfo.market || "\u2014"} (${propertyInfo.marketComposite || "\u2014"})</strong></div>
-  <div><span style="font-size:11px;color:#888">Building</span><br><strong style="font-size:13px">${propertyInfo.buildingType || "\u2014"}, ${propertyInfo.totalSF || "\u2014"} SF</strong></div>
-  <div><span style="font-size:11px;color:#888">Price</span><br><strong style="font-size:13px">${propertyInfo.askingPrice || "\u2014"} (${propertyInfo.priceSF || "\u2014"}/SF)</strong></div>
-  <div><span style="font-size:11px;color:#888">Date Evaluated</span><br><strong style="font-size:13px">${propertyInfo.dateEvaluated || "\u2014"}</strong></div>
-  <div><span style="font-size:11px;color:#888">Evaluator</span><br><strong style="font-size:13px">${propertyInfo.evaluator || "\u2014"}</strong></div></div>
-<table style="width:100%;border-collapse:collapse;margin-bottom:24px;border:1px solid #eee;border-radius:6px;overflow:hidden">
-  <tr style="background:${tierColor}"><th style="padding:8px 12px;color:${GOLD};text-align:left;font-size:12px;font-family:Georgia,serif">Dimension</th>
-  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Weight</th>
-  <th style="padding:8px 12px;color:${GOLD};text-align:center;font-size:12px">Score</th></tr>
-  ${dimTable}
-  <tr style="background:${LIGHT_GOLD}"><td style="padding:8px 12px;font-weight:700;font-family:Georgia,serif;color:${DARK}">Composite</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700">100%</td>
-  <td style="padding:8px 12px;text-align:center;font-weight:700;font-size:16px;color:${DARK}">${compositeScore != null ? compositeScore.toFixed(2) : "\u2014"}</td></tr></table>
-${sectionsHtml}
-<div style="margin-top:32px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#bbb;font-size:10px">
-  Stillport RE Selection Scorecard \u2014 ${config.label} \u2014 Generated ${new Date().toLocaleDateString()}</div></div>`;
-
-      // Render element visibly for html2pdf capture (briefly flashes)
-      const container = document.createElement("div");
-      container.innerHTML = bodyContent;
-      container.style.width = "800px";
-      container.style.background = "white";
-      container.style.position = "absolute";
-      container.style.left = "0";
-      container.style.top = "0";
-      document.body.appendChild(container);
+      // Build PDF payload for server-side generation
+      const pdfPayload = {
+        property: propertyInfo,
+        dimensions: dimensions.map((dim, i) => ({
+          name: dim.name,
+          weight: Math.round(dim.weight * 100) + "%",
+          score: dimAverages[i] != null ? dimAverages[i].toFixed(2) : "\u2014",
+        })),
+        sections: briefing.sections,
+        compositeScore: compositeScore != null ? compositeScore.toFixed(2) : "\u2014",
+        qualLabel: tierResult.label,
+        tierLabel: config.label,
+        tierColor: tier === "T1" ? DARK : T2_ACCENT,
+        gold: GOLD,
+        qualColor: tierResult.color,
+        lightGold: LIGHT_GOLD,
+      };
+      const pdfResp = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pdfPayload),
+      });
+      if (!pdfResp.ok) throw new Error(`PDF generation failed: ${pdfResp.status}`);
+      const pdfBlob = await pdfResp.blob();
       const addrSlug2 = (propertyInfo.name || "Property").replace(/[^a-zA-Z0-9]+/g, "_").replace(/_+/g, "_").slice(0, 50);
       const scoreStr2 = compositeScore != null ? compositeScore.toFixed(2) : "unscored";
-      await html2pdf().set({
-        margin: [0.5, 0.6, 0.5, 0.6],
-        filename: `${addrSlug2}_Strategy_Briefing_${scoreStr2}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      }).from(container).save();
-      document.body.removeChild(container);
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = pdfUrl;
+      a.download = `${addrSlug2}_Strategy_Briefing_${scoreStr2}.pdf`;
+      a.click();
+      URL.revokeObjectURL(pdfUrl);
     } catch (err) { alert(`Error generating briefing: ${err.message}`); }
     finally { setGeneratingPdf(false); }
   };
