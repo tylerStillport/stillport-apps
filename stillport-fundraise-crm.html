@@ -439,7 +439,7 @@ tr{cursor:pointer}
             </div>
             <div class="email-legend">
               <span><span class="email-legend-dot" style="background:var(--primary);"></span>Sent</span>
-              <span><span class="email-legend-dot" style="background:var(--cyan);"></span>Received</span>
+              <span><span class="email-legend-dot" style="background:var(--cyan);"></span>Responded</span>
             </div>
             <div id="emailByStage"></div>
           </div>
@@ -1903,7 +1903,7 @@ function renderEmailDashboard(){
       </div>
       <div class="email-stage-counts">
         <span title="Sent">↑ ${d.sent}</span>
-        <span title="Received">↓ ${d.received}</span>
+        <span title="Responded">↓ ${d.received}</span>
       </div>
     </div>`;
   }).filter(Boolean).join('');
@@ -1925,7 +1925,7 @@ function renderEmailDashboard(){
   const feedHtml=recentEmails.map(a=>{
     const inv=invMap[a.investorId];
     const isSent=a.type==='email';
-    const subject=a.description?.replace(/^(Sent|Received):\s*/,'')||'(no subject)';
+    const subject=a.description?.replace(/^(Sent|Received|Responded):\s*/,'')||'(no subject)';
     const firmName=inv?inv.firm:'Unknown';
     const timeStr=fmtDate(a.date);
     return `<div class="email-feed-item"${inv?` onclick="openDetail('${inv.id}')"`:''}">
@@ -1936,7 +1936,7 @@ function renderEmailDashboard(){
       </div>
       <div class="email-feed-body">
         <div class="email-feed-subject">${subject}</div>
-        <div class="email-feed-meta">${isSent?'Sent to':'From'} <strong>${firmName}</strong> · ${timeStr}</div>
+        <div class="email-feed-meta">${isSent?'Sent to':'Response from'} <strong>${firmName}</strong> · ${timeStr}</div>
       </div>
     </div>`;
   }).join('');
