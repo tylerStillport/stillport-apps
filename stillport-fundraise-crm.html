@@ -240,6 +240,29 @@ tr{cursor:pointer}
 /* Settings page additions */
 .settings-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;max-width:600px;margin-bottom:16px}
 .settings-card h3{font-size:15px;font-weight:600;margin-bottom:12px}
+
+/* Email Tracking Dashboard */
+.email-stage-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.email-stage-row:last-child{border-bottom:none}
+.email-stage-label{flex:1;color:var(--text);font-weight:500}
+.email-stage-bars{flex:2;display:flex;gap:4px;align-items:center}
+.email-bar{height:20px;border-radius:3px;min-width:2px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;transition:width .3s ease}
+.email-bar.sent{background:var(--primary)}
+.email-bar.received{background:var(--cyan)}
+.email-stage-counts{display:flex;gap:12px;font-size:11px;color:var(--text3);min-width:100px;justify-content:flex-end}
+.email-legend{display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:var(--text3)}
+.email-legend-dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
+.email-feed-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;transition:var(--transition)}
+.email-feed-item:hover{background:var(--bg3);margin:0 -8px;padding:8px}
+.email-feed-item:last-child{border-bottom:none}
+.email-feed-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.email-feed-icon.sent{background:var(--primary-bg);color:var(--primary)}
+.email-feed-icon.received{background:var(--cyan-bg);color:var(--cyan)}
+.email-feed-icon svg{width:14px;height:14px}
+.email-feed-body{flex:1;min-width:0}
+.email-feed-subject{color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.email-feed-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.email-total-badge{font-size:22px;font-weight:700;color:var(--primary)}
 </style>
 </head>
 <body>
@@ -398,7 +421,7 @@ tr{cursor:pointer}
             <div id="commitProgress"></div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
           <div class="card">
             <div class="card-header"><span class="card-title">Upcoming Actions</span></div>
             <div id="upcomingActions"></div>
@@ -406,6 +429,26 @@ tr{cursor:pointer}
           <div class="card">
             <div class="card-header"><span class="card-title">Recent Activity</span></div>
             <div id="recentActivity"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Email Tracking by Stage</span>
+              <span id="emailSyncNote" style="font-size:11px;color:var(--text3);"></span>
+            </div>
+            <div class="email-legend">
+              <span><span class="email-legend-dot" style="background:var(--primary);"></span>Sent</span>
+              <span><span class="email-legend-dot" style="background:var(--cyan);"></span>Received</span>
+            </div>
+            <div id="emailByStage"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Recent Emails</span>
+              <span id="emailTotalBadge" class="email-total-badge"></span>
+            </div>
+            <div id="emailFeed" style="max-height:320px;overflow-y:auto;"></div>
           </div>
         </div>
       </div>
@@ -1819,6 +1862,85 @@ function refreshDashboard(){
     </div>`;
   }).join(''):'<p style="font-size:13px;color:var(--text3);padding:8px;">No upcoming actions.</p>';
   document.getElementById('recentActivity').innerHTML=renderActivityItems(DB.activities,5);
+  renderEmailDashboard();
+}
+
+function renderEmailDashboard(){
+  // Gather all email activities
+  const emailActs=DB.activities.filter(a=>a.type==='email'||a.type==='email_received');
+  const invMap={};
+  DB.investors.forEach(i=>{invMap[i.id]=i});
+
+  // Count by stage
+  const stageEmails={};
+  STAGES.forEach(s=>{stageEmails[s.id]={sent:0,received:0}});
+  emailActs.forEach(a=>{
+    const inv=invMap[a.investorId];
+    if(!inv)return;
+    const stage=inv.stage||'researching';
+    if(!stageEmails[stage])stageEmails[stage]={sent:0,received:0};
+    if(a.type==='email')stageEmails[stage].sent++;
+    else stageEmails[stage].received++;
+  });
+
+  // Find max for bar scaling
+  const maxEmails=Math.max(1,...STAGES.map(s=>(stageEmails[s.id]?.sent||0)+(stageEmails[s.id]?.received||0)));
+
+  // Render stage rows (skip stages with zero emails, but always show active ones)
+  const activeStages=STAGES.filter(s=>s.id!=='passed');
+  const stageHtml=activeStages.map(s=>{
+    const d=stageEmails[s.id]||{sent:0,received:0};
+    const total=d.sent+d.received;
+    if(total===0&&!DB.investors.some(i=>i.stage===s.id))return '';
+    const sentW=Math.max(0,Math.round(d.sent/maxEmails*100));
+    const recvW=Math.max(0,Math.round(d.received/maxEmails*100));
+    return `<div class="email-stage-row">
+      <span class="email-stage-label"><span class="badge ${s.badge}" style="font-size:10px;">${s.label}</span></span>
+      <div class="email-stage-bars">
+        ${d.sent?`<div class="email-bar sent" style="width:${sentW}%">${d.sent}</div>`:''}
+        ${d.received?`<div class="email-bar received" style="width:${recvW}%">${d.received}</div>`:''}
+        ${total===0?'<span style="font-size:11px;color:var(--text3);">No emails</span>':''}
+      </div>
+      <div class="email-stage-counts">
+        <span title="Sent">↑ ${d.sent}</span>
+        <span title="Received">↓ ${d.received}</span>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('emailByStage').innerHTML=stageHtml||'<p style="font-size:13px;color:var(--text3);padding:8px;">No email data yet. Sync with Outlook to start tracking.</p>';
+
+  // Sync note
+  const olState=JSON.parse(localStorage.getItem('sp_olsync')||'{}');
+  const syncNote=olState.lastSync?`Last sync: ${fmtDate(olState.lastSync)}`:'Not synced';
+  document.getElementById('emailSyncNote').textContent=syncNote;
+
+  // Total badge
+  const totalSent=emailActs.filter(a=>a.type==='email').length;
+  const totalRecv=emailActs.filter(a=>a.type==='email_received').length;
+  document.getElementById('emailTotalBadge').textContent=emailActs.length;
+
+  // Recent email feed (last 10)
+  const recentEmails=emailActs.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  const feedHtml=recentEmails.map(a=>{
+    const inv=invMap[a.investorId];
+    const isSent=a.type==='email';
+    const subject=a.description?.replace(/^(Sent|Received):\s*/,'')||'(no subject)';
+    const firmName=inv?inv.firm:'Unknown';
+    const timeStr=fmtDate(a.date);
+    return `<div class="email-feed-item"${inv?` onclick="openDetail('${inv.id}')"`:''}">
+      <div class="email-feed-icon ${isSent?'sent':'received'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          ${isSent?'<path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2"/>':'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'}
+        </svg>
+      </div>
+      <div class="email-feed-body">
+        <div class="email-feed-subject">${subject}</div>
+        <div class="email-feed-meta">${isSent?'Sent to':'From'} <strong>${firmName}</strong> · ${timeStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('emailFeed').innerHTML=feedHtml||'<p style="font-size:13px;color:var(--text3);padding:8px;">No emails synced yet. Go to <a href="#" onclick="showPage(\'outlooksync\');return false;" style="color:var(--primary);">Outlook Sync</a> to connect.</p>';
 }
 function drawPipelineChart(){
   const canvas=document.getElementById('pipelineChart');
